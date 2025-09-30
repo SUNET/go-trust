@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"crypto/x509"
 	"fmt"
 	"os"
 
@@ -10,7 +11,40 @@ import (
 
 // Context holds state passed between pipeline steps
 type Context struct {
-	TSLs []*etsi119612.TSL
+	TSLs     []*etsi119612.TSL
+	CertPool *x509.CertPool
+}
+
+// @PipelineStep("select")
+func selectCertPool(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
+	if len(ctx.TSLs) == 0 {
+		return ctx, fmt.Errorf("select: no TSLs loaded in context")
+	}
+	mergedPool := x509.NewCertPool()
+	var policy *etsi119612.TSPServicePolicy
+	if len(args) == 0 {
+		policy = etsi119612.PolicyAll
+	} else {
+		policy = etsi119612.NewTSPServicePolicy()
+		for _, arg := range args {
+			policy.AddServiceTypeIdentifier(arg)
+		}
+	}
+	for _, tsl := range ctx.TSLs {
+		if tsl == nil {
+			continue
+		}
+		tsl.WithTrustServices(func(tsp *etsi119612.TSPType, svc *etsi119612.TSPServiceType) {
+			svc.WithCertificates(func(cert *x509.Certificate) {
+				if tsp.Validate(svc, []*x509.Certificate{cert}, policy) == nil {
+					mergedPool.AddCert(cert)
+				}
+			})
+		})
+	}
+	ctx.CertPool = mergedPool
+	fmt.Printf("CertPool created from %d TSL(s) using policy (args: %v)\n", len(ctx.TSLs), args)
+	return ctx, nil
 }
 
 // @PipelineStep("load")
@@ -61,6 +95,7 @@ func echo(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 func init() {
 	RegisterFunction("echo", echo)
 	RegisterFunction("load", loadTSL)
+	RegisterFunction("select", selectCertPool)
 }
 
 // Pipeline represents a list of Pipe steps

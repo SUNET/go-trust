@@ -61,22 +61,8 @@ func main() {
 		PipelineContext: &pipeline.Context{},
 	}
 
-	// Background updater
-	go func() {
-		for {
-			newCtx, err := pl.Process(&pipeline.Context{})
-			serverCtx.Lock()
-			if err == nil && newCtx != nil {
-				serverCtx.PipelineContext = newCtx
-				serverCtx.LastProcessed = time.Now()
-			}
-			serverCtx.Unlock()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Pipeline error: %v\n", err)
-			}
-			time.Sleep(*freq)
-		}
-	}()
+	// Start background updater
+	api.StartBackgroundUpdater(pl, serverCtx, *freq)
 
 	// Gin API server
 	r := gin.Default()
