@@ -64,3 +64,23 @@ func TestPipeline_Process_FuncError(t *testing.T) {
 	assert.NotNil(t, ctx)
 	assert.Contains(t, err.Error(), "failed")
 }
+
+// TestPipeline_SelectStep tests the select pipeline step with a local test TSL XML file.
+func TestPipeline_SelectStep(t *testing.T) {
+	testTSL := "./testdata/test-tsl.xml"
+	yamlData := `
+- load: ["file://` + testTSL + `"]
+- select: []
+`
+	var pipes []Pipe
+	err := yaml.Unmarshal([]byte(yamlData), &pipes)
+	assert.NoError(t, err)
+	pl := &Pipeline{Pipes: pipes}
+	ctx, err := pl.Process(&Context{})
+	assert.NoError(t, err)
+	assert.NotNil(t, ctx)
+	assert.NotNil(t, ctx.CertPool)
+	if ctx.CertPool != nil && len(ctx.CertPool.Subjects()) == 0 {
+		t.Error("CertPool is empty after select step")
+	}
+}
