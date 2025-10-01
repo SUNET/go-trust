@@ -21,7 +21,7 @@
             <tsl:ServiceStatus>https://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted/</tsl:ServiceStatus>
             <tsl:ServiceDigitalIdentity>
               <tsl:DigitalId>
-                <tsl:X509Certificate>MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7v6k5...</tsl:X509Certificate>
+                <tsl:X509Certificate>MIIC0DCCAbigAwIBAgIUAkDVitacKofB6amAY7/QSzb//2AwDQYJKoZIhvcNAQELBQAwFjEUMBIGA1UEAwwLVGVzdCBDZXJ0MB4XDTI1MTAwMTAwMDAwMFoXDTI2MTAwMTAwMDAwMFowFjEUMBIGA1UEAwwLVGVzdCBDZXJ0MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwpuDPaA6aNWjUjKHm19BmrDetxgSnxG1HybpDE4VlsuBspHxMXTCOVwmCdIHJiyVoO9W5HxsjM4SZ3Cuza3Fj7iHemB6JG3JaAQoALBobxcS8zua0aloNrOsjiySbhlUjjzzc5Fb3yiAIwwuSQjuSPyb2DjN0eQk6nOIewh+YpUQxUku5eRrwiuDXctYw/foiazWcykFUsUUQymxOvDyc5fZx94d2CwWr0BMU2ZypWkjfyIYQDpjoCYw8FVZ+kIJpkOovBL2XqXD+h854gPilxn+advNojJOJusD3t4tCIpA69QCa/T+H6QKBCMXqqiAOhZSOeEqhHkgSzUoTbiQIDAQABo1MwUTAdBgNVHQ4EFgQUS8VItJyZ6rbGszSw+ENhQBDSTgwHwYDVR0jBBgwFoAUS8VItJyZ6rbGszSw+ENhQBDSTgwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAwM/Ks/Ssuj3NNlb20Va5mCDPgMLaImDF5Re5QHnADUdTkhrSGaro+9DPISCwd4rvtqsDLvSFfj9d1vyFiosuXsJTU2KDXFpRloRD7O9u4RShv8L6SIbm9nQRkHAuOyoIhH1DBRa57tK3sa+L8iQ87qc0AwmkK2dNzCudZ2ft2BcL2JhIPyJRZnBP0djJ+qk17Cy9VWqA7MCeTYpwwq3RTVkQN5qYXAHu5rshmjhweBkaFx21RYBWiP4t4LH3+uxvrH+p5Go3oo5HEBvdj0Md1Z4uTfY7YIJZCZ7G3m/LN0z560kfW2oSWnVotz629PIHVIHBbq8H</tsl:X509Certificate>
               </tsl:DigitalId>
             </tsl:ServiceDigitalIdentity>
           </tsl:ServiceInformation>
