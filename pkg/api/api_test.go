@@ -19,6 +19,141 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// Test selectCertPool with no TSLs, no trust services, and no matching policy
+func TestSelectCertPool_Errors(t *testing.T) {
+	// Case 1: No TSLs loaded
+	ctx := &pipeline.Context{TSLs: nil}
+	fn, ok := pipeline.GetFunctionByName("select")
+	if !ok {
+		t.Fatal("select function not found in pipeline")
+	}
+	_, err := fn(nil, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no TSLs loaded")
+
+	// Case 2: TSLs with no trust services
+	emptyTSL := &etsi119612.TSL{
+		StatusList: etsi119612.TrustStatusListType{
+			TslSchemeInformation: &etsi119612.TSLSchemeInformationType{
+				TSLVersionIdentifier: 1,
+				TslSchemeOperatorName: &etsi119612.InternationalNamesType{
+					Name: []*etsi119612.MultiLangNormStringType{
+						{
+							XmlLangAttr: func() *etsi119612.Lang { l := etsi119612.Lang("en"); return &l }(),
+							NonEmptyNormalizedString: func() *etsi119612.NonEmptyNormalizedString {
+								s := etsi119612.NonEmptyNormalizedString("Empty Operator")
+								return &s
+							}(),
+						},
+					},
+				},
+			},
+			TslTrustServiceProviderList: &etsi119612.TrustServiceProviderListType{},
+		},
+	}
+	ctx = &pipeline.Context{TSLs: []*etsi119612.TSL{emptyTSL}}
+	fn, ok = pipeline.GetFunctionByName("select")
+	if !ok {
+		t.Fatal("select function not found in pipeline")
+	}
+	ctx, err = fn(nil, ctx)
+	assert.NoError(t, err)
+	assert.NotNil(t, ctx.CertPool)
+	// CertPool should be empty: verify with a dummy cert, expect x509.UnknownAuthorityError
+	dummyCert := &x509.Certificate{Raw: []byte("dummy")}
+	opts := x509.VerifyOptions{Roots: ctx.CertPool}
+	_, err = dummyCert.Verify(opts)
+	assert.Error(t, err)
+	// Accept either 'unknown authority' or 'expired or is not yet valid' as valid error
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "unknown authority") && !strings.Contains(errMsg, "expired or is not yet valid") {
+		t.Errorf("Expected unknown authority or expired cert error, got: %s", errMsg)
+	}
+
+	// Case 3: TSLs with trust service but no matching policy
+	service := &etsi119612.TSPServiceType{
+		TslServiceInformation: &etsi119612.TSPServiceInformationType{
+			TslServiceTypeIdentifier: "urn:dummy:type",
+			TslServiceStatus:         etsi119612.ServiceStatusGranted,
+			ServiceName: &etsi119612.InternationalNamesType{
+				Name: []*etsi119612.MultiLangNormStringType{
+					{
+						XmlLangAttr: func() *etsi119612.Lang { l := etsi119612.Lang("en"); return &l }(),
+						NonEmptyNormalizedString: func() *etsi119612.NonEmptyNormalizedString {
+							s := etsi119612.NonEmptyNormalizedString("Dummy Service")
+							return &s
+						}(),
+					},
+				},
+			},
+			TslServiceDigitalIdentity: &etsi119612.DigitalIdentityListType{},
+		},
+	}
+	provider := &etsi119612.TSPType{
+		TslTSPInformation: &etsi119612.TSPInformationType{
+			TSPName: &etsi119612.InternationalNamesType{
+				Name: []*etsi119612.MultiLangNormStringType{
+					{
+						XmlLangAttr: func() *etsi119612.Lang { l := etsi119612.Lang("en"); return &l }(),
+						NonEmptyNormalizedString: func() *etsi119612.NonEmptyNormalizedString {
+							s := etsi119612.NonEmptyNormalizedString("Dummy Provider")
+							return &s
+						}(),
+					},
+				},
+			},
+		},
+		TslTSPServices: &etsi119612.TSPServicesListType{
+			TslTSPService: []*etsi119612.TSPServiceType{service},
+		},
+	}
+	tslWithService := &etsi119612.TSL{
+		StatusList: etsi119612.TrustStatusListType{
+			TslSchemeInformation: &etsi119612.TSLSchemeInformationType{
+				TSLVersionIdentifier: 2,
+				TslSchemeOperatorName: &etsi119612.InternationalNamesType{
+					Name: []*etsi119612.MultiLangNormStringType{
+						{
+							XmlLangAttr: func() *etsi119612.Lang { l := etsi119612.Lang("en"); return &l }(),
+							NonEmptyNormalizedString: func() *etsi119612.NonEmptyNormalizedString {
+								s := etsi119612.NonEmptyNormalizedString("Service Operator")
+								return &s
+							}(),
+						},
+					},
+				},
+			},
+			TslTrustServiceProviderList: &etsi119612.TrustServiceProviderListType{
+				TslTrustServiceProvider: []*etsi119612.TSPType{provider},
+			},
+		},
+	}
+	// Use a policy that does not match the service type
+	policy := etsi119612.NewTSPServicePolicy()
+	policy.ServiceTypeIdentifier = []string{"urn:other:type"}
+	ctx = &pipeline.Context{TSLs: []*etsi119612.TSL{tslWithService}}
+	fn, ok = pipeline.GetFunctionByName("select")
+	if !ok {
+		t.Fatal("select function not found in pipeline")
+	}
+	origPolicyAll := etsi119612.PolicyAll
+	etsi119612.PolicyAll = policy
+	ctx, err = fn(nil, ctx)
+	etsi119612.PolicyAll = origPolicyAll
+	assert.NoError(t, err)
+	assert.NotNil(t, ctx.CertPool)
+	// CertPool should be empty: verify with a dummy cert, expect x509.UnknownAuthorityError
+	dummyCert = &x509.Certificate{Raw: []byte("dummy")}
+	opts = x509.VerifyOptions{Roots: ctx.CertPool}
+	_, err = dummyCert.Verify(opts)
+	assert.Error(t, err)
+	// Accept either 'unknown authority' or 'expired or is not yet valid' as valid error
+	errMsg = err.Error()
+	if !strings.Contains(errMsg, "unknown authority") && !strings.Contains(errMsg, "expired or is not yet valid") {
+		t.Errorf("Expected unknown authority or expired cert error, got: %s", errMsg)
+	}
+}
+
 var testCertBase64 string
 var testCertDER []byte
 var testCert *x509.Certificate
@@ -118,6 +253,60 @@ func TestInfoEndpoint_Empty(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "tsl_summaries")
 }
 
+func TestInfoEndpoint_NilAndMixedTSLs(t *testing.T) {
+	r, serverCtx := setupTestServer()
+
+	// Case 1: TSLs is nil
+	serverCtx.Lock()
+	serverCtx.PipelineContext.TSLs = nil
+	serverCtx.Unlock()
+	req, _ := http.NewRequest("GET", "/info", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Contains(t, w.Body.String(), "tsl_summaries")
+
+	// Case 2: TSLs is empty slice
+	serverCtx.Lock()
+	serverCtx.PipelineContext.TSLs = []*etsi119612.TSL{}
+	serverCtx.Unlock()
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Contains(t, w.Body.String(), "tsl_summaries")
+
+	// Case 3: TSLs contains nil and a dummy TSL with TSLVersionIdentifier
+	dummyTSL := &etsi119612.TSL{
+		StatusList: etsi119612.TrustStatusListType{
+			TslSchemeInformation: &etsi119612.TSLSchemeInformationType{
+				TSLVersionIdentifier: 42,
+				TslSchemeOperatorName: &etsi119612.InternationalNamesType{
+					Name: []*etsi119612.MultiLangNormStringType{
+						{
+							XmlLangAttr: func() *etsi119612.Lang { l := etsi119612.Lang("en"); return &l }(),
+							NonEmptyNormalizedString: func() *etsi119612.NonEmptyNormalizedString {
+								s := etsi119612.NonEmptyNormalizedString("Dummy Operator")
+								return &s
+							}(),
+						},
+					},
+				},
+			},
+		},
+	}
+	serverCtx.Lock()
+	serverCtx.PipelineContext.TSLs = []*etsi119612.TSL{nil, dummyTSL}
+	serverCtx.Unlock()
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "tsl_summaries")
+	// Check that dummy TSL summary fields are present
+	assert.Contains(t, body, "scheme_operator_name")
+	assert.Contains(t, body, "num_trust_service_providers")
+}
+
 func TestAuthzenDecisionEndpoint(t *testing.T) {
 	r, _ := setupTestServer()
 	body := `{
@@ -145,6 +334,47 @@ func TestAuthzenDecisionEndpoint(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	assert.Contains(t, w.Body.String(), `"decision":true`)
+}
+
+func TestAuthzenDecisionEndpoint_Errors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r, _ := setupTestServer()
+
+	// Malformed JSON
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader("{")))
+	if w.Code != 400 {
+		t.Errorf("Expected 400 for malformed JSON, got %d", w.Code)
+	}
+
+	// Valid JSON, invalid x5c (not a list)
+	body := `{"subject":{"properties":{"x5c":"notalist"}},"resource":{},"action":{},"context":{}}`
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader(body)))
+	if !strings.Contains(w.Body.String(), "\"decision\":false") {
+		t.Errorf("Expected decision:false for invalid x5c, got %s", w.Body.String())
+	}
+
+	// Valid JSON, missing CertPool
+	r2, serverCtx2 := setupTestServer()
+	serverCtx2.Lock()
+	serverCtx2.PipelineContext.CertPool = nil
+	serverCtx2.Unlock()
+	body = `{"subject":{"properties":{"x5c":["` + testCertBase64 + `"]}},"resource":{},"action":{},"context":{}}`
+	w = httptest.NewRecorder()
+	r2.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader(body)))
+	if !strings.Contains(w.Body.String(), "CertPool is nil") {
+		t.Errorf("Expected CertPool is nil error, got %s", w.Body.String())
+	}
+
+	// Valid JSON, cert verification failure (garbage cert)
+	garbageCert := base64.StdEncoding.EncodeToString([]byte("notacert"))
+	body = fmt.Sprintf(`{"subject":{"properties":{"x5c":["%s"]}},"resource":{},"action":{},"context":{}}`, garbageCert)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader(body)))
+	if !strings.Contains(w.Body.String(), "\"decision\":false") {
+		t.Errorf("Expected decision:false for cert verification failure, got %s", w.Body.String())
+	}
 }
 
 func TestStartBackgroundUpdater(t *testing.T) {

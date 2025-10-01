@@ -263,3 +263,18 @@ func TestLoadTSL_Errors(t *testing.T) {
 		t.Errorf("Expected error for invalid XML, got nil")
 	}
 }
+
+func TestPipe_UnmarshalYAML_Errors(t *testing.T) {
+	// Not a mapping node
+	var pipes []Pipe
+	yamlData := `- not-a-map`
+	err := yaml.Unmarshal([]byte(yamlData), &pipes)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Pipe must be a map")
+
+	// Mapping node with wrong structure (not a sequence for args)
+	yamlData = `- testfunc: foo`
+	err = yaml.Unmarshal([]byte(yamlData), &pipes)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Pipe arguments must be a sequence")
+}
