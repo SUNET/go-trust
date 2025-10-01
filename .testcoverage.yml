@@ -3,5 +3,10 @@ threshold:
    file: 70
    package: 80
    total: 95
+exclude:
+   paths:
+      - \*\.xsd$
+      -  ^pkg/etsi119612/xs
+      - cmd
 git-branch: badges
 git-token: ${{ github.ref_name == 'main' && secrets.GITHUB_TOKEN || '' }}

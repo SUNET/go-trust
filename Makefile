@@ -27,7 +27,7 @@ test:
 
 .PHONY: build
 build:  ## build the library
-	CGO_ENABLED=0 go build ${LDFLAGS} -o gt -a main.go
+	CGO_ENABLED=0 go build ${LDFLAGS} -o gt -a ./cmd/main.go
 
 .PHONY: clean
 clean: ## remove temporary files
