@@ -150,6 +150,8 @@ make coverage
 
 ```
 go-trust/
+├── .github/        # GitHub configuration
+│   └── workflows/  # GitHub Actions workflows
 ├── cmd/            # Command line tools
 ├── pkg/            # Core packages
 │   ├── api/        # HTTP API implementation
@@ -158,6 +160,15 @@ go-trust/
 ├── example/        # Example configurations and data
 └── tests/          # Integration tests
 ```
+
+### CI/CD Workflows
+
+This project uses GitHub Actions for continuous integration and delivery:
+
+- **Go Workflow** (`go.yml`): Builds, tests, and checks code coverage
+- **Release Workflow** (`release.yml`): Creates releases when new tags are pushed
+- **CodeQL Analysis** (`codeql.yml`): Scans code for security vulnerabilities
+- **Dependency Review** (`dependency-review.yml`): Checks dependencies for security issues
 
 ## Contributing
 
@@ -182,7 +193,10 @@ make coverage
 
 # Code follows project style guidelines
 go fmt ./...
+go vet ./...
 ```
+
+The CI pipeline will automatically run these checks when you submit a pull request. All checks must pass before a PR can be merged.
 
 ## License
 
