@@ -49,7 +49,7 @@ jobs:
     
     - name: Verify Changed files
       if: github.ref == 'refs/heads/main'
-      uses: tj-actions/verify-changed-files@v14
+      uses: tj-actions/verify-changed-files@v17
       id: verify-changed-files
       with:
         files: README.md
