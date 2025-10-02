@@ -1,19 +1,11 @@
 package pipeline
 
 import (
-	"crypto/x509"
 	"fmt"
 	"os"
 
-	"github.com/SUNET/g119612/pkg/etsi119612"
 	"gopkg.in/yaml.v3"
 )
-
-// Context holds state passed between pipeline steps
-type Context struct {
-	TSLs     []*etsi119612.TSL
-	CertPool *x509.CertPool
-}
 
 // Pipeline represents a list of Pipe steps
 type Pipeline struct {

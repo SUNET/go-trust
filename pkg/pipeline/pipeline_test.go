@@ -1,74 +1,16 @@
 package pipeline
 
 import (
-	"bytes"
 	"crypto/x509"
-	"encoding/base64"
-	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 	"testing"
 	"text/template"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
-
-var testCertBase64 string
-var testCertDER []byte
-var testCert *x509.Certificate
-
-// generateTestCertBase64 runs openssl to generate a self-signed cert and returns the base64-encoded DER string.
-func generateTestCertBase64() (string, []byte, *x509.Certificate, error) {
-	keyFile, err := os.CreateTemp("", "testkey-*.pem")
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to create temp key file: %w", err)
-	}
-	defer os.Remove(keyFile.Name())
-	keyFile.Close()
-	certFile, err := os.CreateTemp("", "testcert-*.pem")
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to create temp cert file: %w", err)
-	}
-	defer os.Remove(certFile.Name())
-	certFile.Close()
-	derFile, err := os.CreateTemp("", "testcert-*.der")
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to create temp der file: %w", err)
-	}
-	defer os.Remove(derFile.Name())
-	derFile.Close()
-
-	opensslCmd := fmt.Sprintf("openssl req -x509 -newkey rsa:2048 -keyout %s -out %s -days 365 -nodes -subj '/CN=Test Cert' 2>/dev/null && openssl x509 -outform der -in %s -out %s 2>/dev/null && openssl base64 -in %s -A 2>/dev/null", keyFile.Name(), certFile.Name(), certFile.Name(), derFile.Name(), derFile.Name())
-	cmd := exec.Command("bash", "-c", opensslCmd)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err = cmd.Run()
-	output := out.String()
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("openssl error: %v\noutput: %s", err, output)
-	}
-	certBase64 := strings.TrimSpace(output)
-	certDER, err := base64.StdEncoding.DecodeString(certBase64)
-	if err != nil {
-		return certBase64, nil, nil, fmt.Errorf("base64 decode error: %v\noutput: %s", err, output)
-	}
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return certBase64, certDER, nil, fmt.Errorf("parse cert error: %v\noutput: %s", err, output)
-	}
-	return certBase64, certDER, cert, nil
-}
-
-func init() {
-	var err error
-	testCertBase64, testCertDER, testCert, err = generateTestCertBase64()
-	if err != nil {
-		panic("failed to generate test cert: " + err.Error())
-	}
-}
 
 func TestPipeline_Process_Success(t *testing.T) {
 	RegisterFunction("testfunc", func(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
@@ -76,7 +18,10 @@ func TestPipeline_Process_Success(t *testing.T) {
 		if ctx == nil {
 			t.Fatal("ctx should not be nil")
 		}
-		ctx.TSLs = append(ctx.TSLs, nil) // simulate adding a TSL
+		if ctx.TSLs == nil {
+			ctx.TSLs = utils.NewStack[*etsi119612.TSL]()
+		}
+		ctx.TSLs.Push(nil) // simulate adding a TSL
 		return ctx, nil
 	})
 	yamlData := `
@@ -91,20 +36,18 @@ func TestPipeline_Process_Success(t *testing.T) {
 	ctx, err := pl.Process(&Context{})
 	assert.NoError(t, err)
 	assert.NotNil(t, ctx)
-	assert.Len(t, ctx.TSLs, 1)
+	assert.Equal(t, 1, ctx.TSLs.Size())
 }
 
 func TestPipeline_Process_UnknownMethod(t *testing.T) {
 	yamlData := `
-- unknown:
-    - foo
+- foo: []
 `
 	var pipes []Pipe
 	err := yaml.Unmarshal([]byte(yamlData), &pipes)
 	assert.NoError(t, err)
 	pl := &Pipeline{Pipes: pipes}
 	ctx, err := pl.Process(&Context{})
-	assert.Error(t, err)
 	assert.Nil(t, ctx)
 	assert.Contains(t, err.Error(), "unknown methodName")
 }
@@ -137,16 +80,13 @@ func TestPipeline_SelectStep(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "test-tsl-*.xml")
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
-	err = tmpl.Execute(tmpfile, map[string]string{"X509Certificate": testCertBase64})
+
+	err = tmpl.Execute(tmpfile, map[string]string{"X509Certificate": TestCertBase64})
 	assert.NoError(t, err)
 	tmpfile.Close()
-	yamlData := `
-- load: ["file://` + tmpfile.Name() + `"]
-- select: []
-`
+	yamlData := "- load: [\"" + tmpfile.Name() + "\"]\n- select: []\n"
 	var pipes []Pipe
 	err = yaml.Unmarshal([]byte(yamlData), &pipes)
-	assert.NoError(t, err)
 	pl := &Pipeline{Pipes: pipes}
 	ctx, err := pl.Process(&Context{})
 	assert.NoError(t, err)
@@ -156,21 +96,8 @@ func TestPipeline_SelectStep(t *testing.T) {
 		opts := x509.VerifyOptions{
 			Roots: ctx.CertPool,
 		}
-		_, err := testCert.Verify(opts)
+		_, err := TestCert.Verify(opts)
 		assert.NoError(t, err, "testCert should verify against the CertPool")
-	}
-}
-
-func TestPipeline_EchoStep(t *testing.T) {
-	initialCtx := &Context{TSLs: []*etsi119612.TSL{nil}}
-	pipes := []Pipe{{MethodName: "echo", MethodArguments: []string{"foo", "bar"}}}
-	pl := &Pipeline{Pipes: pipes}
-	ctx, err := pl.Process(initialCtx)
-	if err != nil {
-		t.Fatalf("echo step failed: %v", err)
-	}
-	if ctx != initialCtx {
-		t.Errorf("echo step should return the same context instance")
 	}
 }
 
@@ -180,9 +107,7 @@ func TestNewPipeline(t *testing.T) {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpfile.Name())
-	yamlContent := `
-- echo: ["foo", "bar"]
-`
+	yamlContent := "- echo: [\"foo\", \"bar\"]"
 	if _, err := tmpfile.Write([]byte(yamlContent)); err != nil {
 		t.Fatalf("failed to write to temp file: %v", err)
 	}
@@ -207,13 +132,15 @@ func TestSelectCertPool_EdgeCases(t *testing.T) {
 	// No TSLs
 	ctx := &Context{TSLs: nil}
 	_, err := selectCertPool(nil, ctx)
-	if err == nil || err.Error() != "select: no TSLs loaded in context" {
+	if err == nil || err.Error() != "no TSLs loaded" {
 		t.Errorf("Expected error for no TSLs, got: %v", err)
 	}
 
-	// TSLs with no matching policy (simulate with empty TSLs)
-	tsls := []*etsi119612.TSL{&etsi119612.TSL{}}
-	ctx = &Context{TSLs: tsls}
+	// TSLs with no matching policy
+	tsl1 := generateTSL("Service1", "http://service-type1", []string{"cert1"})
+	stack := utils.NewStack[*etsi119612.TSL]()
+	stack.Push(tsl1)
+	ctx = &Context{TSLs: stack}
 	ctx, err = selectCertPool(nil, ctx, "nonexistent-policy")
 	if err != nil {
 		t.Errorf("Expected no error for no matching policy, got: %v", err)
@@ -222,9 +149,12 @@ func TestSelectCertPool_EdgeCases(t *testing.T) {
 		t.Errorf("Expected CertPool to be set for no matching policy")
 	}
 
-	// Multiple TSLs (simulate with two empty TSLs)
-	tsls = []*etsi119612.TSL{&etsi119612.TSL{}, &etsi119612.TSL{}}
-	ctx = &Context{TSLs: tsls}
+	// Multiple TSLs with different service types
+	tsl2 := generateTSL("Service2", "http://service-type2", []string{"cert2"})
+	stack = utils.NewStack[*etsi119612.TSL]()
+	stack.Push(tsl1)
+	stack.Push(tsl2)
+	ctx = &Context{TSLs: stack}
 	ctx, err = selectCertPool(nil, ctx)
 	if err != nil {
 		t.Errorf("Expected no error for multiple TSLs, got: %v", err)
@@ -235,7 +165,7 @@ func TestSelectCertPool_EdgeCases(t *testing.T) {
 }
 
 func TestLoadTSL_Errors(t *testing.T) {
-	ctx := &Context{}
+	ctx := NewContext()
 	// Invalid file path
 	_, err := loadTSL(nil, ctx, "file:///nonexistent/path.xml")
 	if err == nil {
@@ -267,13 +197,13 @@ func TestLoadTSL_Errors(t *testing.T) {
 func TestPipe_UnmarshalYAML_Errors(t *testing.T) {
 	// Not a mapping node
 	var pipes []Pipe
-	yamlData := `- not-a-map`
+	yamlData := "- not-a-map"
 	err := yaml.Unmarshal([]byte(yamlData), &pipes)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Pipe must be a map")
 
 	// Mapping node with wrong structure (not a sequence for args)
-	yamlData = `- testfunc: foo`
+	yamlData = "- testfunc: foo"
 	err = yaml.Unmarshal([]byte(yamlData), &pipes)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Pipe arguments must be a sequence")

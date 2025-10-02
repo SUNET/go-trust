@@ -88,7 +88,7 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		defer serverCtx.RUnlock()
 		tslCount := 0
 		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
-			tslCount = len(serverCtx.PipelineContext.TSLs)
+			tslCount = serverCtx.PipelineContext.TSLs.Size()
 		}
 		c.JSON(200, gin.H{
 			"tsl_count":      tslCount,
@@ -160,7 +160,7 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		defer serverCtx.RUnlock()
 		summaries := make([]map[string]interface{}, 0)
 		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
-			for _, tsl := range serverCtx.PipelineContext.TSLs {
+			for _, tsl := range serverCtx.PipelineContext.TSLs.ToSlice() {
 				if tsl != nil {
 					summaries = append(summaries, tsl.Summary())
 				}

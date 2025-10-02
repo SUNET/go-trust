@@ -15,6 +15,7 @@ import (
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/pipeline"
+	"github.com/SUNET/go-trust/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -51,7 +52,9 @@ func TestSelectCertPool_Errors(t *testing.T) {
 			TslTrustServiceProviderList: &etsi119612.TrustServiceProviderListType{},
 		},
 	}
-	ctx = &pipeline.Context{TSLs: []*etsi119612.TSL{emptyTSL}}
+	stack := utils.NewStack[*etsi119612.TSL]()
+	stack.Push(emptyTSL)
+	ctx = &pipeline.Context{TSLs: stack}
 	fn, ok = pipeline.GetFunctionByName("select")
 	if !ok {
 		t.Fatal("select function not found in pipeline")
@@ -131,7 +134,9 @@ func TestSelectCertPool_Errors(t *testing.T) {
 	// Use a policy that does not match the service type
 	policy := etsi119612.NewTSPServicePolicy()
 	policy.ServiceTypeIdentifier = []string{"urn:other:type"}
-	ctx = &pipeline.Context{TSLs: []*etsi119612.TSL{tslWithService}}
+	stack2 := utils.NewStack[*etsi119612.TSL]()
+	stack2.Push(tslWithService)
+	ctx = &pipeline.Context{TSLs: stack2}
 	fn, ok = pipeline.GetFunctionByName("select")
 	if !ok {
 		t.Fatal("select function not found in pipeline")
@@ -232,7 +237,7 @@ func setupTestServer() (*gin.Engine, *ServerContext) {
 func TestStatusEndpoint(t *testing.T) {
 	r, serverCtx := setupTestServer()
 	serverCtx.Lock()
-	serverCtx.PipelineContext.TSLs = make([]*etsi119612.TSL, 2) // Simulate 2 TSLs loaded
+	serverCtx.PipelineContext.TSLs = utils.NewStack[*etsi119612.TSL]() // Simulate 2 TSLs loaded
 	serverCtx.Unlock()
 
 	req, _ := http.NewRequest("GET", "/status", nil)
@@ -268,7 +273,7 @@ func TestInfoEndpoint_NilAndMixedTSLs(t *testing.T) {
 
 	// Case 2: TSLs is empty slice
 	serverCtx.Lock()
-	serverCtx.PipelineContext.TSLs = []*etsi119612.TSL{}
+	serverCtx.PipelineContext.TSLs = utils.NewStack[*etsi119612.TSL]()
 	serverCtx.Unlock()
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -295,7 +300,9 @@ func TestInfoEndpoint_NilAndMixedTSLs(t *testing.T) {
 		},
 	}
 	serverCtx.Lock()
-	serverCtx.PipelineContext.TSLs = []*etsi119612.TSL{nil, dummyTSL}
+	serverCtx.PipelineContext.TSLs = utils.NewStack[*etsi119612.TSL]()
+	serverCtx.PipelineContext.TSLs.Push(nil)
+	serverCtx.PipelineContext.TSLs.Push(dummyTSL)
 	serverCtx.Unlock()
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -380,7 +387,9 @@ func TestAuthzenDecisionEndpoint_Errors(t *testing.T) {
 func TestStartBackgroundUpdater(t *testing.T) {
 	// Register a mock pipeline step that always adds a known value
 	pipeline.RegisterFunction("mockstep", func(pl *pipeline.Pipeline, ctx *pipeline.Context, args ...string) (*pipeline.Context, error) {
-		return &pipeline.Context{TSLs: []*etsi119612.TSL{nil}}, nil
+		stack := utils.NewStack[*etsi119612.TSL]()
+		stack.Push(nil)
+		return &pipeline.Context{TSLs: stack}, nil
 	})
 	pipes := []pipeline.Pipe{{MethodName: "mockstep", MethodArguments: []string{}}}
 	pl := &pipeline.Pipeline{Pipes: pipes}
@@ -393,7 +402,7 @@ func TestStartBackgroundUpdater(t *testing.T) {
 
 	serverCtx.RLock()
 	defer serverCtx.RUnlock()
-	if serverCtx.PipelineContext == nil || len(serverCtx.PipelineContext.TSLs) != 1 {
+	if serverCtx.PipelineContext == nil || serverCtx.PipelineContext.TSLs == nil || serverCtx.PipelineContext.TSLs.Size() != 1 {
 		t.Errorf("ServerContext was not updated by StartBackgroundUpdater")
 	}
 }
