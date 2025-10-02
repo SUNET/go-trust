@@ -1,0 +1,13 @@
+# Example pipeline configuration for working with TSLs
+# This pipeline demonstrates the various steps available in go-trust
+
+# Generate a TSL from a directory structure
+- generate: ["./example/example-tsl"]
+
+# Extract all certificates into a certificate pool for validation
+- select: []
+
+# Publish the TSL as XML files in the output directory
+# The filenames will be based on distribution point URIs if available,
+# otherwise they will be named with default patterns like tsl-0.xml
+- publish: ["./output"]
