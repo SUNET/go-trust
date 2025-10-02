@@ -54,11 +54,11 @@ The [example](./example/) directory contains:
 Go-Trust provides a command line interface for processing TSLs and managing trust decisions:
 
 ```bash
-# Run the trust service
-./gt serve --config config.yaml
+# Run the trust service with a pipeline configuration
+./gt ./pipeline.yaml
 
-# Process TSLs using a pipeline configuration
-./gt pipeline --config pipeline.yaml
+# Run with custom settings
+./gt --host 0.0.0.0 --port 8080 --frequency 1h ./pipeline.yaml
 ```
 
 ### API Endpoints
@@ -75,10 +75,47 @@ Example AuthZEN decision request:
 {
   "subject": {
     "type": "x509_certificate",
-    "id": "MIIC..."
+    "id": "subject-123",
+    "properties": {
+      "x5c": [
+        "MIIDQjCCAiqgAwIBAgIUJlq+zz4..."
+      ]
+    }
+  },
+  "resource": {
+    "type": "service",
+    "id": "resource-123",
+    "properties": {}
   },
   "action": {
-    "name": "trust"
+    "name": "trust",
+    "properties": {}
+  },
+  "context": {}
+}
+```
+
+Example response:
+
+```json
+{
+  "decision": true
+}
+```
+
+Or with error details:
+
+```json
+{
+  "decision": false,
+  "context": {
+    "id": "err-123",
+    "reason_admin": {
+      "error": "certificate has expired or is not yet valid"
+    },
+    "reason_user": {
+      "message": "The certificate is not trusted"
+    }
   }
 }
 ```
@@ -95,34 +132,27 @@ Go-Trust uses a pipeline architecture for TSL processing:
 Example pipeline configuration (YAML):
 
 ```yaml
-pipeline:
-  - method: load_tsl
-    args:
-      - "https://example.com/trustlist.xml"
-  - method: select_cert_pool
-  - method: publish_tsl
-    args:
-      - "/path/to/output/directory"
+# Pipeline steps are defined as a sequence of operations
+- generate: ["./example/example-tsl"]  # Generate TSL from directory
+- select: []                          # Extract certificates into a pool
+- publish: ["./output"]               # Publish TSLs as XML files
 ```
 
 ## Configuration
 
-Example configuration file:
+The application is configured using command-line flags:
 
-```yaml
-server:
-  host: "0.0.0.0"
-  port: 8080
+```bash
+# Start the API server with custom settings
+./gt --host 0.0.0.0 --port 8080 --frequency 1h ./path/to/pipeline.yaml
+```
 
-tsl:
-  sources:
-    - url: "https://example.com/trustlist.xml"
-      refresh_interval: "24h"
-  cache_dir: "/var/cache/go-trust"
-
-logging:
-  level: "info"
-  format: "json"
+Available command-line options:
+- `--host`: API server hostname (default: 127.0.0.1)
+- `--port`: API server port (default: 6001)
+- `--frequency`: Pipeline update frequency (default: 5m)
+- `--help`: Show help message
+- `--version`: Show version information
 ```
 
 ## Development
