@@ -10,3 +10,4 @@ exclude:
       - cmd
 git-branch: badges
 git-token: ${{ github.ref_name == 'main' && secrets.GITHUB_TOKEN || '' }}
+output: .badges/main/coverage.svg

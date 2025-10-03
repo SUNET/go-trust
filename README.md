@@ -4,13 +4,16 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/SUNET/go-trust.svg)](https://pkg.go.dev/github.com/SUNET/go-trust)
 [![Go Report Card](https://goreportcard.com/badge/github.com/SUNET/go-trust)](https://goreportcard.com/report/github.com/SUNET/go-trust)
-![Coverage](https://img.shields.io/badge/coverage-72.6%25-brightgreen)
+[![Coverage](https://raw.githubusercontent.com/SUNET/go-trust/badges/.badges/main/coverage.svg)](https://github.com/SUNET/go-trust/actions/workflows/go.yml)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/SUNET/go-trust/go.yml?branch=main)](https://github.com/SUNET/go-trust/actions)
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![Latest Release](https://img.shields.io/github/v/release/SUNET/go-trust?include_prereleases)](https://github.com/SUNET/go-trust/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/SUNET/go-trust)](https://go.dev/)
+[![Go Compatibility](https://img.shields.io/badge/compatible-1.25+-00ADD8?logo=go)](https://go.dev/)
 [![Issues](https://img.shields.io/github/issues/SUNET/go-trust)](https://github.com/SUNET/go-trust/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/SUNET/go-trust)](https://github.com/SUNET/go-trust/commits/main)
+[![CodeQL](https://github.com/SUNET/go-trust/actions/workflows/codeql.yml/badge.svg)](https://github.com/SUNET/go-trust/actions/workflows/codeql.yml)
+[![Dependency Status](https://img.shields.io/librariesio/github/SUNET/go-trust)](https://libraries.io/github/SUNET/go-trust)
 
 </div>
 

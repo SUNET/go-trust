@@ -46,22 +46,28 @@ jobs:
       uses: tj-actions/coverage-badge-go@v2
       with:
         filename: coverage.txt
+        output: .badges/main/coverage.svg
     
     - name: Verify Changed files
       if: github.ref == 'refs/heads/main'
       uses: tj-actions/verify-changed-files@v17
       id: verify-changed-files
       with:
-        files: README.md
+        files: |
+          .badges/main/coverage.svg
     
     - name: Commit coverage badge
       if: github.ref == 'refs/heads/main' && steps.verify-changed-files.outputs.files_changed == 'true'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add README.md
+        git fetch origin badges || git branch badges
+        git checkout badges
+        mkdir -p .badges/main
+        cp -f .badges/main/coverage.svg .badges/main/coverage.svg || true
+        git add .badges/main/coverage.svg
         git commit -m "chore: Update coverage badge"
-        git push
+        git push origin badges --force
 
   lint:
     name: Lint
