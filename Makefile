@@ -28,7 +28,7 @@ test: ## run tests with coverage, race detection, and timeout
 
 .PHONY: build
 build:  ## build the library
-	CGO_ENABLED=0 go build ${LDFLAGS} -o gt -a ./cmd/main.go
+	CGO_ENABLED=1 go build ${LDFLAGS} -o gt -a ./cmd/main.go
 
 .PHONY: clean
 clean: ## remove temporary files
