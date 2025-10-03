@@ -4,7 +4,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/SUNET/go-trust.svg)](https://pkg.go.dev/github.com/SUNET/go-trust)
 [![Go Report Card](https://goreportcard.com/badge/github.com/SUNET/go-trust)](https://goreportcard.com/report/github.com/SUNET/go-trust)
-![Coverage](https://img.shields.io/badge/coverage-75.9%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-72.6%25-brightgreen)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/SUNET/go-trust/go.yml?branch=main)](https://github.com/SUNET/go-trust/actions)
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![Latest Release](https://img.shields.io/github/v/release/SUNET/go-trust?include_prereleases)](https://github.com/SUNET/go-trust/releases)
@@ -25,6 +25,7 @@ Go-Trust is a local trust engine that provides trust decisions based on ETSI TS 
 - **Certificate Validation**: Evaluate X509 certificates against trusted services
 - **Pipeline Processing**: Flexible TSL processing with configurable steps
 - **XML Publishing**: Serialize TSLs to XML for distribution
+- **XML Signing**: Sign XML documents using file-based keys or PKCS#11 hardware security modules
 
 ## Installation
 
@@ -46,6 +47,15 @@ The [example](./example/) directory contains:
 - Example directory structure for generating TSLs
 - Sample pipeline configuration
 - Usage examples for various trust scenarios
+
+## Digital Signatures
+
+Go-Trust includes a dedicated package for XML digital signatures in [pkg/dsig](./pkg/dsig/). This package supports:
+
+- File-based certificate and key signing
+- PKCS#11 hardware security module integration
+- Standardized interface for all signing methods
+- Testing utilities for PKCS#11 with SoftHSM
 
 ## Usage
 
@@ -129,6 +139,40 @@ Go-Trust uses a pipeline architecture for TSL processing:
 3. **Publish**: Serialize TSLs to XML files
 4. **Custom**: Add your own processing steps
 
+### XML Digital Signatures
+
+Go-Trust supports XML-DSIG signatures for published TSLs using either:
+
+1. **File-based certificates and keys**: Standard PEM-encoded X.509 certificates and private keys
+2. **PKCS#11 hardware tokens**: HSMs or smart cards for secure key storage and operations
+
+#### File-Based Signing
+
+For development and testing environments, you can use file-based certificates and private keys:
+
+```yaml
+- publish: ["./output", "/path/to/cert.pem", "/path/to/key.pem"]
+```
+
+This method reads the certificate and private key from PEM-encoded files.
+
+#### PKCS#11 Hardware Token Signing
+
+For production environments, you can use PKCS#11 hardware security modules (HSMs) or smart cards:
+
+```yaml
+- publish: ["./output", "pkcs11:module=/path/to/lib;pin=1234;slot-id=0", "key-label", "cert-label"]
+```
+
+The PKCS#11 URI format follows RFC 7512 and supports these parameters:
+
+- `module`: Path to PKCS#11 library/middleware (required)
+- `pin`: PIN code for token access (required)
+- `slot-id`: Numeric slot identifier (optional)
+- `token`: Token label for identifying the token (optional, alternative to slot-id)
+
+The `key-label` and `cert-label` arguments specify the labels used to identify the private key and certificate in the HSM.
+
 Example pipeline configuration (YAML):
 
 ```yaml
@@ -136,7 +180,18 @@ Example pipeline configuration (YAML):
 - generate: ["./example/example-tsl"]  # Generate TSL from directory
 - select: []                          # Extract certificates into a pool
 - publish: ["./output"]               # Publish TSLs as XML files
+- publish: ["./output", "/path/to/cert.pem", "/path/to/key.pem"]  # Publish with file-based XML-DSIG signatures
+- publish: ["./output", "pkcs11:module=/usr/lib/softhsm/libsofthsm2.so;pin=1234;slot-id=0", "tsl-signing-key", "tsl-signing-cert"]  # Publish with PKCS#11 XML-DSIG signatures
 ```
+
+#### HSM Compatibility
+
+The PKCS#11 implementation has been tested with:
+- SoftHSM (for development/testing)
+- Thales Luna HSM
+- YubiKey (via PIV application)
+
+For other HSMs, you may need to adjust the configuration according to your device's specifications.
 
 ## Configuration
 
@@ -227,6 +282,57 @@ go vet ./...
 ```
 
 The CI pipeline will automatically run these checks when you submit a pull request. All checks must pass before a PR can be merged.
+
+#### PKCS#11 Testing with SoftHSM
+
+Go-Trust includes tests for PKCS#11-based XML-DSIG signing using SoftHSM. These tests are skipped if SoftHSM is not installed.
+
+To run the PKCS#11 tests with SoftHSM:
+
+1. Install SoftHSM version 2:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install softhsm2
+
+   # CentOS/RHEL
+   sudo yum install softhsm2
+
+   # macOS with Homebrew
+   brew install softhsm
+   ```
+
+2. Run the tests:
+   ```bash
+   # Run all tests, including SoftHSM tests if available
+   go test ./...
+
+   # Run only the SoftHSM tests
+   go test ./pkg/pipeline -run TestPKCS11SignerWithSoftHSM
+   ```
+
+The test will:
+1. Create a temporary SoftHSM token
+2. Generate a test certificate and private key
+3. Import them into the token
+4. Use the PKCS11Signer to sign XML data
+5. Clean up the temporary token when done
+
+These tests ensure that the PKCS#11 signing functionality works correctly with hardware security modules.
+
+### PKCS#11 Signing Implementation
+
+Go-Trust now uses the improved Signer interface from the goxmldsig library to handle XML-DSIG signatures with PKCS#11 hardware tokens. This integration provides several benefits:
+
+1. **More Consistent API**: The signing code follows a unified interface approach
+2. **Better Abstraction**: The signing mechanism is abstracted behind the Signer interface
+3. **Simpler Maintenance**: Reduced code duplication and complexity
+4. **Improved Security**: Direct hardware token integration with no private key exposure
+
+When using a PKCS#11 token for signing, the library:
+1. Connects to the token using the provided configuration
+2. Locates the key and certificate based on their labels/IDs
+3. Creates a PKCS11Signer that implements the goxmldsig Signer interface
+4. Uses the PKCS11Signer to sign the XML document without ever exposing the private key material
 
 ## License
 
