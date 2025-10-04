@@ -378,6 +378,86 @@ When using a PKCS#11 token for signing, the library:
 3. Creates a PKCS11Signer that implements the goxmldsig Signer interface
 4. Uses the PKCS11Signer to sign the XML document without ever exposing the private key material
 
+## Logging System
+
+Go-Trust includes a flexible, structured logging system built around an abstract Logger interface, with implementations available for different logging backends.
+
+### Logging Interface
+
+The logging system is designed with the following features:
+
+- **Structured Logging**: Log entries include structured fields, not just text messages
+- **Log Levels**: Support for Debug, Info, Warn, Error, and Fatal levels
+- **Context Awareness**: Logging with context propagation
+- **Extensible**: Support for different logging backends through adapters
+
+### Using Logging in Pipeline Configuration
+
+Pipeline YAML configurations support logging configuration through a dedicated `config` section:
+
+```yaml
+config:
+  logging:
+    level: info    # debug, info, warn, error, or fatal
+    format: text   # text or json
+
+pipes:
+  - log:
+  - "Processing TSL files"
+  - count=5
+  - source=example.com
+  
+  - log:
+  - level=debug "Detailed debugging information"
+  - tsl_id=SETSL123
+```
+
+### Log Pipeline Step
+
+The `log` pipeline step allows logging messages with structured data:
+
+```yaml
+- log:
+- "Message to log"
+- key1=value1
+- key2=value2
+```
+
+To specify a log level other than the default (info):
+
+```yaml
+- log:
+- level=debug "Debug message with more details"
+- operation=validation
+- result=success
+```
+
+### Programmatic Usage
+
+When extending Go-Trust, you can use the logging system programmatically:
+
+```go
+import "github.com/SUNET/go-trust/pkg/logging"
+
+func MyFunction() {
+    logger := logging.DefaultLogger()
+    
+    // Simple logging
+    logger.Info("Processing started")
+    
+    // With structured fields
+    logger.Debug("Validation details", 
+        logging.F("certCount", 5),
+        logging.F("valid", true),
+    )
+    
+    // With context
+    ctx := context.Background()
+    ctxLogger := logger.WithContext(ctx)
+    ctxLogger.Info("Operation completed")
+}
+```
+
 ## License
 
 This project is licensed under the BSD 2-Clause License - see the [LICENSE.txt](LICENSE.txt) file for details.
