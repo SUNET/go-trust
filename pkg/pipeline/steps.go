@@ -644,6 +644,31 @@ func Echo(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	return ctx, nil
 }
 
+// Log is a pipeline step that outputs a log message to the console.
+// This is useful for adding debug information or progress updates in the pipeline.
+//
+// Parameters:
+//   - pl: Pipeline instance managing the step execution
+//   - ctx: Pipeline context containing state information
+//   - args: String slice with args[0] being the message to log
+//
+// Example usage in pipeline YAML:
+//
+//	- log:
+//	- "Processing complete: 10 TSLs transformed to HTML"
+//
+func Log(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
+	if len(args) == 0 {
+		return ctx, nil
+	}
+	message := args[0]
+	
+	// Simple log to stdout
+	fmt.Printf("[LOG] %s\n", message)
+	
+	return ctx, nil
+}
+
 // PublishTSL is a pipeline step that serializes TSLs to XML files in a specified directory.
 // It uses the distribution point information from each TSL to determine the file name.
 //
@@ -800,4 +825,5 @@ func init() {
 	RegisterFunction("echo", Echo)
 	RegisterFunction("generate", GenerateTSL)
 	RegisterFunction("publish", PublishTSL)
+	RegisterFunction("log", Log)
 }
