@@ -1,0 +1,29 @@
+---
+# Example pipeline configuration using embedded XSLT stylesheet and index generation
+# This pipeline:
+# 1. Loads TSL files from URLs
+# 2. Transforms them to HTML using the embedded stylesheet
+# 3. Generates an index.html file for the TSLs
+
+# Step 1: Load TSLs from URLs
+- load:
+- https://esignature.ec.europa.eu/efda/tl-browser/api/v1/download/EU-lotl.xml
+
+# Step 2: Verify TSL signatures
+- verify:
+- true
+
+# Step 3: Transform TSLs to HTML using embedded stylesheet
+- transform:
+- embedded:tsl-to-html.xslt
+- ./output
+- html
+
+# Step 4: Generate an index.html file for the transformed TSLs
+- generate_index:
+- ./output
+- "EU Trust Service Lists - Index"
+
+# Step 5: Log completion
+- log:
+- Transformation and index generation complete. Files saved to ./output directory

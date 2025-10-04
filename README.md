@@ -52,13 +52,13 @@ The [example](./example/) directory contains:
 - Sample pipeline configuration
 - Usage examples for various trust scenarios
 
-## XSLT Transformation
+## XSLT Transformation & HTML Index Generation
 
-Go-Trust includes a built-in XSLT stylesheet for transforming TSLs into user-friendly HTML documents. The stylesheet is embedded in the binary, so you don't need to distribute separate files.
+Go-Trust includes built-in tools for transforming TSLs into user-friendly HTML documents and creating index pages for collections of TSLs.
 
 ### Using Embedded XSLT in Pipeline Configuration
 
-You can reference the embedded XSLT in your pipeline configuration:
+The stylesheet is embedded in the binary, so you don't need to distribute separate files:
 
 ```yaml
 - transform:
@@ -72,6 +72,25 @@ This configuration transforms all TSLs in the pipeline to HTML using the embedde
 ### Available Embedded Stylesheets
 
 - **tsl-to-html.xslt**: Transforms TSLs into comprehensive HTML documents with PicoCSS styling
+
+### Generating an Index for HTML TSLs
+
+After transforming TSLs to HTML, you can generate an index.html file that lists all the TSLs with key metadata:
+
+```yaml
+- generate_index:
+- /output/directory
+- "Trust Service Lists Index"
+```
+
+The index page includes:
+- Links to each TSL HTML file
+- Territory codes and badges
+- Sequence numbers and dates
+- Service counts
+- TSL types
+
+For a complete example, see [transform-with-index.yaml](./example/transform-with-index.yaml) in the examples directory.
 
 ## Digital Signatures
 
