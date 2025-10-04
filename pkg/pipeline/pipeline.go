@@ -5,7 +5,9 @@ package pipeline
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/SUNET/go-trust/pkg/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,7 +15,9 @@ import (
 // Each Pipe calls a registered function with specified arguments to process Trust Status Lists.
 // The Pipeline is typically loaded from a YAML configuration file.
 type Pipeline struct {
-	Pipes []Pipe // The ordered list of pipeline steps to execute
+	Pipes  []Pipe                    // The ordered list of pipeline steps to execute
+	Logger logging.Logger            // Logger for pipeline operations
+	Config map[string]map[string]any // Configuration for pipeline steps
 }
 
 // Process executes all the steps in the pipeline in sequence, passing the Context from one step to the next.
@@ -68,13 +72,65 @@ func NewPipeline(filename string) (*Pipeline, error) {
 	}
 	defer file.Close()
 
-	var pipes []Pipe
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&pipes); err != nil {
-		return nil, err
+	// First try to decode a full pipeline configuration with config sections
+	var pipelineConfig struct {
+		Pipes  []Pipe                    `yaml:"pipes"`
+		Config map[string]map[string]any `yaml:"config"`
 	}
 
-	return &Pipeline{Pipes: pipes}, nil
+	decoder := yaml.NewDecoder(file)
+	if err := decoder.Decode(&pipelineConfig); err != nil {
+		// If that fails, try the legacy format which is just an array of pipes
+		file.Seek(0, 0) // Reset file position
+		var pipes []Pipe
+		decoder = yaml.NewDecoder(file)
+		if err := decoder.Decode(&pipes); err != nil {
+			return nil, err
+		}
+
+		// Use default logger with legacy format
+		return &Pipeline{
+			Pipes:  pipes,
+			Logger: logging.DefaultLogger(),
+			Config: make(map[string]map[string]any),
+		}, nil
+	}
+
+	// Handle logging configuration if present
+	logger := logging.DefaultLogger()
+	if logConfig, ok := pipelineConfig.Config["logging"]; ok {
+		if levelStr, ok := logConfig["level"].(string); ok {
+			var level logging.LogLevel
+			switch strings.ToLower(levelStr) {
+			case "debug":
+				level = logging.DebugLevel
+			case "info":
+				level = logging.InfoLevel
+			case "warn":
+				level = logging.WarnLevel
+			case "error":
+				level = logging.ErrorLevel
+			case "fatal":
+				level = logging.FatalLevel
+			default:
+				level = logging.InfoLevel
+			}
+			logger = logging.NewLogger(level)
+		}
+
+		if format, ok := logConfig["format"].(string); ok && format == "json" {
+			level := logger.GetLevel()
+			{
+				logger = logging.JSONLogger(level)
+			}
+		}
+	}
+
+	return &Pipeline{
+		Pipes:  pipelineConfig.Pipes,
+		Logger: logger,
+		Config: pipelineConfig.Config,
+	}, nil
 }
 
 // Pipe represents a single step in the pipeline with its method name and arguments.

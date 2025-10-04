@@ -13,6 +13,7 @@ import (
 type Context struct {
 	TSLs     *utils.Stack[*etsi119612.TSL] // A stack of Trust Status Lists being processed
 	CertPool *x509.CertPool                // Certificate pool for trust verification
+	Data     map[string]any                // Data store for sharing information between pipeline steps
 }
 
 // EnsureTSLStack ensures that the TSL stack is initialized.
@@ -52,5 +53,6 @@ func (ctx *Context) InitCertPool() *Context {
 func NewContext() *Context {
 	return &Context{
 		TSLs: utils.NewStack[*etsi119612.TSL](),
+		Data: make(map[string]any),
 	}
 }

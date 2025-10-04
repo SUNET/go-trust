@@ -12,6 +12,7 @@ import (
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/dsig"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/ThalesGroup/crypto11"
 	"gopkg.in/yaml.v3"
 )
@@ -654,18 +655,97 @@ func Echo(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 //
 // Example usage in pipeline YAML:
 //
-//	- log:
-//	- "Processing complete: 10 TSLs transformed to HTML"
+//   - log:
+//   - "Processing complete: 10 TSLs transformed to HTML"
 //
+// Log outputs a message using the pipeline's logger.
+// This function supports structured logging with fields in key=value format.
+// The first argument is the log message, subsequent arguments are treated as fields.
+//
+// Example usage in YAML:
+//
+//   - log:
+//   - Processing complete
+//   - count=5
+//   - filename=tsl.xml
+//
+// Level can be specified with a "level=" prefix in the message:
+//
+//   - log:
+//   - level=debug Debug information
+//   - key=value
+//
+// Parameters:
+//   - pl: The pipeline containing the logger
+//   - ctx: The current context
+//   - args: First arg is message, subsequent args are fields in key=value format
+//
+// Returns:
+//   - The unmodified context
+//   - No error in normal operation
 func Log(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	if len(args) == 0 {
 		return ctx, nil
 	}
+
+	// If no logger is configured, use a default logger
+	logger := pl.Logger
+	if logger == nil {
+		logger = logging.DefaultLogger()
+	}
+
+	// Parse the message and check for level prefix
 	message := args[0]
-	
-	// Simple log to stdout
-	fmt.Printf("[LOG] %s\n", message)
-	
+	level := logging.InfoLevel // default level
+
+	if strings.HasPrefix(message, "level=") {
+		parts := strings.SplitN(message, " ", 2)
+		levelStr := strings.TrimPrefix(parts[0], "level=")
+
+		switch strings.ToLower(levelStr) {
+		case "debug":
+			level = logging.DebugLevel
+		case "info":
+			level = logging.InfoLevel
+		case "warn", "warning":
+			level = logging.WarnLevel
+		case "error":
+			level = logging.ErrorLevel
+		case "fatal":
+			level = logging.FatalLevel
+		}
+
+		if len(parts) > 1 {
+			message = parts[1]
+		} else {
+			message = ""
+		}
+	}
+
+	// Parse additional fields
+	var fields []logging.Field
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) == 2 {
+			fields = append(fields, logging.F(parts[0], parts[1]))
+		}
+	}
+
+	// Log with the appropriate level
+	switch level {
+	case logging.DebugLevel:
+		logger.Debug(message, fields...)
+	case logging.InfoLevel:
+		logger.Info(message, fields...)
+	case logging.WarnLevel:
+		logger.Warn(message, fields...)
+	case logging.ErrorLevel:
+		logger.Error(message, fields...)
+	case logging.FatalLevel:
+		logger.Fatal(message, fields...)
+	}
+
 	return ctx, nil
 }
 
@@ -776,8 +856,17 @@ func PublishTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 			filename = "test-tsl.xml"
 		}
 
-		// Log the filename for debugging
-		fmt.Printf("Publishing TSL %d to file: %s\n", i, filename)
+		// Log the filename using the structured logger
+		if logger := pl.Logger; logger != nil {
+			logger.Info("Publishing TSL to file",
+				logging.F("index", i),
+				logging.F("filename", filename))
+		} else {
+			// Fallback to default logger if none is configured in the pipeline
+			logging.DefaultLogger().Info("Publishing TSL to file",
+				logging.F("index", i),
+				logging.F("filename", filename))
+		}
 
 		// Create XML representation with root element
 		type TrustStatusListWrapper struct {
