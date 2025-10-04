@@ -61,14 +61,18 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 	}
 }
 
-// StartBackgroundUpdater starts a goroutine that periodically updates the ServerContext using the pipeline.
-// It executes the pipeline at the specified frequency, updating the ServerContext with the new PipelineContext.
-// If the pipeline execution fails, it logs an error message using the pipeline's logger,
-// but the goroutine continues running.
+// StartBackgroundUpdater runs the pipeline at regular intervals and updates the server context.
+// This function starts a goroutine that processes the pipeline at the specified frequency
+// and updates the ServerContext with the new pipeline results. The updated context is then
+// used by API handlers to respond to requests with fresh data.
+//
+// Success and failure events are logged using the ServerContext's structured logger:
+// - On success: An info-level message with the update frequency
+// - On failure: An error-level message with the error details and frequency
 //
 // Parameters:
 //   - pl: The pipeline to process periodically
-//   - serverCtx: The server context to update with pipeline results
+//   - serverCtx: The server context to update with pipeline results (must have a valid logger)
 //   - freq: The frequency at which to process the pipeline (e.g., 5m for every 5 minutes)
 //
 // This function is typically called at server startup to ensure TSLs are kept up-to-date.
@@ -83,21 +87,14 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 			}
 			serverCtx.Unlock()
 			if err != nil {
-				// Use serverCtx.Logger if available, otherwise use pipeline logger or default
-				if serverCtx.Logger != nil {
-					serverCtx.Logger.Error("Pipeline processing failed",
-						logging.F("error", err.Error()),
-						logging.F("frequency", freq.String()))
-				} else if pl.Logger != nil {
-					pl.Logger.Error("Pipeline processing failed",
-						logging.F("error", err.Error()),
-						logging.F("frequency", freq.String()))
-				} else {
-					// Fallback to default logger if neither has a configured logger
-					logging.DefaultLogger().Error("Pipeline processing failed",
-						logging.F("error", err.Error()),
-						logging.F("frequency", freq.String()))
-				}
+				// ServerContext always has a logger after our improvements
+				serverCtx.Logger.Error("Pipeline processing failed",
+					logging.F("error", err.Error()),
+					logging.F("frequency", freq.String()))
+			} else {
+				// Log successful update
+				serverCtx.Logger.Info("Pipeline processed successfully",
+					logging.F("frequency", freq.String()))
 			}
 			time.Sleep(freq)
 		}
@@ -106,8 +103,10 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 }
 
 // NewServerContext creates a new ServerContext with a configured logger.
-// If the logger is nil, it will use the DefaultLogger.
+// The ServerContext will always have a valid logger - if none is provided,
+// it will use the DefaultLogger.
 func NewServerContext(logger logging.Logger) *ServerContext {
+	// Always ensure a valid logger
 	if logger == nil {
 		logger = logging.DefaultLogger()
 	}
@@ -137,6 +136,12 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
 			tslCount = serverCtx.PipelineContext.TSLs.Size()
 		}
+		
+		// Log the status request with structured logging
+		serverCtx.Logger.Info("API status request",
+			logging.F("remote_ip", c.ClientIP()),
+			logging.F("tsl_count", tslCount))
+		
 		c.JSON(200, gin.H{
 			"tsl_count":      tslCount,
 			"last_processed": serverCtx.LastProcessed.Format("2006-01-02T15:04:05Z07:00"),
@@ -149,9 +154,17 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 	r.POST("/authzen/decision", func(c *gin.Context) {
 		var req authzen.EvaluationRequest
 		if err := c.BindJSON(&req); err != nil {
+			// Log invalid request with structured logging
+			serverCtx.Logger.Error("Invalid AuthZEN request",
+				logging.F("remote_ip", c.ClientIP()),
+				logging.F("error", err.Error()))
 			c.JSON(400, gin.H{"error": "invalid request"})
 			return
 		}
+		
+		// Log valid request
+		serverCtx.Logger.Debug("Processing AuthZEN request",
+			logging.F("remote_ip", c.ClientIP()))
 
 		// Try to extract x5c from subject, resource, action, and context
 		var allCerts []*x509.Certificate
@@ -179,6 +192,9 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 
 		// If any x5c parse error, return error in AuthZEN-compatible response
 		if parseErr != nil {
+			serverCtx.Logger.Error("AuthZEN certificate parsing error",
+				logging.F("remote_ip", c.ClientIP()),
+				logging.F("error", parseErr.Error()))
 			c.JSON(200, buildResponse(false, parseErr.Error()))
 			return
 		}
@@ -193,12 +209,21 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 				}
 				_, err := allCerts[0].Verify(opts)
 				if err == nil {
+					serverCtx.Logger.Info("AuthZEN request approved",
+						logging.F("remote_ip", c.ClientIP()),
+						logging.F("subject", req.Subject.ID))
 					c.JSON(200, buildResponse(true, ""))
 				} else {
+					serverCtx.Logger.Info("AuthZEN request denied",
+						logging.F("remote_ip", c.ClientIP()),
+						logging.F("subject", req.Subject.ID),
+						logging.F("error", err.Error()))
 					c.JSON(200, buildResponse(false, err.Error()))
 				}
 				return
 			} else {
+				serverCtx.Logger.Error("AuthZEN request failed - CertPool is nil",
+					logging.F("remote_ip", c.ClientIP()))
 				c.JSON(200, buildResponse(false, "CertPool is nil"))
 				return
 			}
@@ -218,6 +243,12 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 				}
 			}
 		}
+		
+		// Log info request with structured logging
+		serverCtx.Logger.Info("API info request",
+			logging.F("remote_ip", c.ClientIP()),
+			logging.F("summary_count", len(summaries)))
+		
 		c.JSON(200, gin.H{
 			"tsl_summaries": summaries,
 		})
