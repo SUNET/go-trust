@@ -239,7 +239,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to load pipeline: %v\n", err)
 		os.Exit(1)
 	}
-	pl.Logger = logger
+	// Create a pipeline with our configured logger
+	pl = pl.WithLogger(logger)
 
 	// Create server context with logger
 	serverCtx := api.NewServerContext(logger)

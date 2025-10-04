@@ -14,9 +14,12 @@ import (
 // Pipeline represents a sequence of processing steps (Pipes) to be executed in order.
 // Each Pipe calls a registered function with specified arguments to process Trust Status Lists.
 // The Pipeline is typically loaded from a YAML configuration file.
+//
+// The Pipeline always has a Logger available for use by pipeline steps.
+// If no logger is specified during initialization, a default logger is used.
 type Pipeline struct {
 	Pipes  []Pipe                    // The ordered list of pipeline steps to execute
-	Logger logging.Logger            // Logger for pipeline operations
+	Logger logging.Logger            // Logger for pipeline operations (never nil)
 	Config map[string]map[string]any // Configuration for pipeline steps
 }
 
@@ -72,6 +75,9 @@ func NewPipeline(filename string) (*Pipeline, error) {
 	}
 	defer file.Close()
 
+	// Always start with a default logger that will be used if no configuration is provided
+	logger := logging.DefaultLogger()
+
 	// First try to decode a full pipeline configuration with config sections
 	var pipelineConfig struct {
 		Pipes  []Pipe                    `yaml:"pipes"`
@@ -88,16 +94,15 @@ func NewPipeline(filename string) (*Pipeline, error) {
 			return nil, err
 		}
 
-		// Use default logger with legacy format
+		// Use the default logger with legacy format
 		return &Pipeline{
 			Pipes:  pipes,
-			Logger: logging.DefaultLogger(),
+			Logger: logger,
 			Config: make(map[string]map[string]any),
 		}, nil
 	}
 
 	// Handle logging configuration if present
-	logger := logging.DefaultLogger()
 	if logConfig, ok := pipelineConfig.Config["logging"]; ok {
 		if levelStr, ok := logConfig["level"].(string); ok {
 			var level logging.LogLevel
@@ -171,4 +176,24 @@ func (p *Pipe) UnmarshalYAML(value *yaml.Node) error {
 		p.MethodArguments[i] = arg.Value
 	}
 	return nil
+}
+
+// WithLogger returns a new Pipeline with the specified logger.
+// This allows for easy reconfiguration of the logger while preserving
+// the rest of the pipeline configuration.
+//
+// Parameters:
+//   - logger: The new logger to use for the pipeline
+//
+// Returns:
+//   - A new Pipeline instance with the same configuration but using the specified logger
+func (pl *Pipeline) WithLogger(logger logging.Logger) *Pipeline {
+	if logger == nil {
+		logger = logging.DefaultLogger()
+	}
+	return &Pipeline{
+		Pipes:  pl.Pipes,
+		Logger: logger,
+		Config: pl.Config,
+	}
 }

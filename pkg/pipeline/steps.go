@@ -575,6 +575,10 @@ func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 		return ctx, fmt.Errorf("failed to load TSL from %s: %w", url, err)
 	}
 
+	pl.Logger.Info("Loaded TSL",
+		logging.F("url", url),
+		logging.F("providers", len(tsl.StatusList.TslTrustServiceProviderList.TslTrustServiceProvider)))
+
 	ctx.EnsureTSLStack().TSLs.Push(tsl)
 	return ctx, nil
 }
@@ -688,11 +692,8 @@ func Log(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 		return ctx, nil
 	}
 
-	// If no logger is configured, use a default logger
+	// Pipeline always has a logger
 	logger := pl.Logger
-	if logger == nil {
-		logger = logging.DefaultLogger()
-	}
 
 	// Parse the message and check for level prefix
 	message := args[0]
@@ -856,17 +857,10 @@ func PublishTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 			filename = "test-tsl.xml"
 		}
 
-		// Log the filename using the structured logger
-		if logger := pl.Logger; logger != nil {
-			logger.Info("Publishing TSL to file",
-				logging.F("index", i),
-				logging.F("filename", filename))
-		} else {
-			// Fallback to default logger if none is configured in the pipeline
-			logging.DefaultLogger().Info("Publishing TSL to file",
-				logging.F("index", i),
-				logging.F("filename", filename))
-		}
+		// Log the filename using the pipeline's logger
+		pl.Logger.Info("Publishing TSL to file",
+			logging.F("index", i),
+			logging.F("filename", filename))
 
 		// Create XML representation with root element
 		type TrustStatusListWrapper struct {
