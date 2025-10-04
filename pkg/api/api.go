@@ -4,10 +4,10 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/SUNET/go-trust/pkg/authzen"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/pipeline"
 	"github.com/gin-gonic/gin"
 )
@@ -63,7 +63,8 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 
 // StartBackgroundUpdater starts a goroutine that periodically updates the ServerContext using the pipeline.
 // It executes the pipeline at the specified frequency, updating the ServerContext with the new PipelineContext.
-// If the pipeline execution fails, an error message is printed to stderr, but the goroutine continues running.
+// If the pipeline execution fails, it logs an error message using the pipeline's logger,
+// but the goroutine continues running.
 //
 // Parameters:
 //   - pl: The pipeline to process periodically
@@ -82,12 +83,37 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 			}
 			serverCtx.Unlock()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Pipeline error: %v\n", err)
+				// Use serverCtx.Logger if available, otherwise use pipeline logger or default
+				if serverCtx.Logger != nil {
+					serverCtx.Logger.Error("Pipeline processing failed",
+						logging.F("error", err.Error()),
+						logging.F("frequency", freq.String()))
+				} else if pl.Logger != nil {
+					pl.Logger.Error("Pipeline processing failed",
+						logging.F("error", err.Error()),
+						logging.F("frequency", freq.String()))
+				} else {
+					// Fallback to default logger if neither has a configured logger
+					logging.DefaultLogger().Error("Pipeline processing failed",
+						logging.F("error", err.Error()),
+						logging.F("frequency", freq.String()))
+				}
 			}
 			time.Sleep(freq)
 		}
 	}()
 	return nil
+}
+
+// NewServerContext creates a new ServerContext with a configured logger.
+// If the logger is nil, it will use the DefaultLogger.
+func NewServerContext(logger logging.Logger) *ServerContext {
+	if logger == nil {
+		logger = logging.DefaultLogger()
+	}
+	return &ServerContext{
+		Logger: logger,
+	}
 }
 
 // RegisterAPIRoutes registers all API endpoints on the given Gin router using ServerContext.

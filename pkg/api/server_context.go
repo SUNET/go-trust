@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/pipeline"
 )
 
@@ -15,6 +16,7 @@ type ServerContext struct {
 	mu              sync.RWMutex      // Mutex for thread-safe access
 	PipelineContext *pipeline.Context // The current pipeline context with TSLs and certificate pool
 	LastProcessed   time.Time         // Timestamp when the pipeline was last processed
+	Logger          logging.Logger    // Logger for API operations, used by handlers
 }
 
 // Lock locks the ServerContext for writing.
