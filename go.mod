@@ -57,3 +57,5 @@ require (
 replace github.com/moov-io/signedxml v1.2.3 => github.com/leifj/signedxml v1.2.3-leifj2
 
 replace github.com/SUNET/g119612 => ../g119612
+
+replace github.com/russellhaering/goxmldsig v1.5.0 => github.com/SUNET/goxmldsig v1.5.0-leifj1
