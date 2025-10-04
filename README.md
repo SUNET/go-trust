@@ -52,6 +52,27 @@ The [example](./example/) directory contains:
 - Sample pipeline configuration
 - Usage examples for various trust scenarios
 
+## XSLT Transformation
+
+Go-Trust includes a built-in XSLT stylesheet for transforming TSLs into user-friendly HTML documents. The stylesheet is embedded in the binary, so you don't need to distribute separate files.
+
+### Using Embedded XSLT in Pipeline Configuration
+
+You can reference the embedded XSLT in your pipeline configuration:
+
+```yaml
+- transform:
+- embedded:tsl-to-html.xslt
+- /output/directory
+- html
+```
+
+This configuration transforms all TSLs in the pipeline to HTML using the embedded stylesheet and writes the output files to the specified directory.
+
+### Available Embedded Stylesheets
+
+- **tsl-to-html.xslt**: Transforms TSLs into comprehensive HTML documents with PicoCSS styling
+
 ## Digital Signatures
 
 Go-Trust includes a dedicated package for XML digital signatures in [pkg/dsig](./pkg/dsig/). This package supports:

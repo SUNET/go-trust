@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/xslt"
 )
 
 // TransformTSL applies an XSLT transformation to each TSL in the context.
@@ -22,22 +23,24 @@ import (
 // The step requires the 'xsltproc' command to be available on the system.
 //
 // Arguments:
-//   - arg[0]: Path to the XSLT stylesheet
+//   - arg[0]: Path to the XSLT stylesheet. Can be a filesystem path or an embedded XSLT path.
+//     For embedded XSLTs, use the format 'embedded:filename.xslt'.
+//     e.g., 'embedded:tsl-to-html.xslt' for the embedded TSL-to-HTML stylesheet.
 //   - arg[1]: Mode: "replace" or directory path.
 //   - If "replace", transformed TSLs replace the originals in the context.
 //   - Otherwise, it's treated as a directory path where transformed TSLs are saved.
 //   - arg[2]: (Optional) Output file extension (default: "xml")
 //
-// Example usage in pipeline YAML:
+// Example usage in pipeline YAML for file-based XSLT:
 //
 //   - transform:
 //   - /path/to/stylesheet.xslt
 //   - replace
 //
-// OR
+// OR for embedded XSLT:
 //
 //   - transform:
-//   - /path/to/stylesheet.xslt
+//   - embedded:tsl-to-html.xslt
 //   - /output/directory
 //   - html
 func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
@@ -53,9 +56,14 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 		extension = args[2]
 	}
 
-	// Check if the XSLT file exists
-	if _, err := os.Stat(xsltPath); os.IsNotExist(err) {
-		return ctx, fmt.Errorf("XSLT stylesheet not found at path: %s", xsltPath)
+	// Check if this is an embedded XSLT or a file path
+	isEmbedded := xslt.IsEmbeddedPath(xsltPath)
+
+	// Check if the XSLT file exists (if it's not embedded)
+	if !isEmbedded {
+		if _, err := os.Stat(xsltPath); os.IsNotExist(err) {
+			return ctx, fmt.Errorf("XSLT stylesheet not found at path: %s", xsltPath)
+		}
 	}
 
 	// Check if we need to create an output directory
@@ -105,8 +113,17 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 		// Add XML header
 		xmlData = append([]byte(xml.Header), xmlData...)
 
-		// Apply XSLT transformation using xsltproc (external tool)
-		transformedXML, err := applyXSLTTransformation(xmlData, xsltPath)
+		// Apply XSLT transformation
+		var transformedXML []byte
+		if isEmbedded {
+			// Use embedded XSLT
+			embeddedName := xslt.ExtractNameFromPath(xsltPath)
+			transformedXML, err = applyEmbeddedXSLTTransformation(xmlData, embeddedName)
+		} else {
+			// Use external XSLT file
+			transformedXML, err = applyFileXSLTTransformation(xmlData, xsltPath)
+		}
+
 		if err != nil {
 			return ctx, fmt.Errorf("XSLT transformation failed for TSL %d: %w", i, err)
 		}
@@ -159,8 +176,8 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 	return ctx, nil
 }
 
-// applyXSLTTransformation applies an XSLT transformation to XML data
-func applyXSLTTransformation(xmlData []byte, xsltPath string) ([]byte, error) {
+// applyFileXSLTTransformation applies an XSLT transformation to XML data using an external XSLT file
+func applyFileXSLTTransformation(xmlData []byte, xsltPath string) ([]byte, error) {
 	// Create a temporary file for the input XML
 	tempFile, err := os.CreateTemp("", "input-*.xml")
 	if err != nil {
@@ -178,6 +195,57 @@ func applyXSLTTransformation(xmlData []byte, xsltPath string) ([]byte, error) {
 
 	// Run xsltproc command to apply the transformation
 	cmd := exec.Command("xsltproc", xsltPath, tempFile.Name())
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("xsltproc error: %w - %s", err, stderr.String())
+	}
+
+	return stdout.Bytes(), nil
+}
+
+// applyEmbeddedXSLTTransformation applies an XSLT transformation to XML data using an embedded XSLT file
+func applyEmbeddedXSLTTransformation(xmlData []byte, xsltName string) ([]byte, error) {
+	// Get the embedded XSLT content
+	xsltContent, err := xslt.Get(xsltName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get embedded XSLT: %w", err)
+	}
+
+	// Create a temporary file for the input XML
+	tempXmlFile, err := os.CreateTemp("", "input-*.xml")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp XML file: %w", err)
+	}
+	defer os.Remove(tempXmlFile.Name())
+
+	// Write XML data to the temp file
+	if _, err := tempXmlFile.Write(xmlData); err != nil {
+		return nil, fmt.Errorf("failed to write XML to temp file: %w", err)
+	}
+	if err := tempXmlFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close temp XML file: %w", err)
+	}
+
+	// Create a temporary file for the XSLT
+	tempXsltFile, err := os.CreateTemp("", "style-*.xslt")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp XSLT file: %w", err)
+	}
+	defer os.Remove(tempXsltFile.Name())
+
+	// Write XSLT data to the temp file
+	if _, err := tempXsltFile.Write(xsltContent); err != nil {
+		return nil, fmt.Errorf("failed to write XSLT to temp file: %w", err)
+	}
+	if err := tempXsltFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close temp XSLT file: %w", err)
+	}
+
+	// Run xsltproc command to apply the transformation
+	cmd := exec.Command("xsltproc", tempXsltFile.Name(), tempXmlFile.Name())
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

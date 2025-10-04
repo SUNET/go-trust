@@ -1,0 +1,22 @@
+---
+# Example pipeline configuration using embedded XSLT stylesheet
+# This pipeline loads TSL files from URLs, transforms them to HTML using the embedded stylesheet,
+# and saves the output to the specified directory.
+
+# Step 1: Load TSLs from URLs
+- load:
+- https://esignature.ec.europa.eu/efda/tl-browser/api/v1/download/EU-lotl.xml
+
+# Step 2: Verify TSL signatures
+- verify:
+- true
+
+# Step 3: Transform TSLs to HTML using embedded stylesheet
+- transform:
+- embedded:tsl-to-html.xslt
+- ./output
+- html
+
+# Step 4: Log transformation results
+- log:
+- Transformation complete. HTML files saved to ./output directory
