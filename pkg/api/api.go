@@ -62,6 +62,15 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 }
 
 // StartBackgroundUpdater starts a goroutine that periodically updates the ServerContext using the pipeline.
+// It executes the pipeline at the specified frequency, updating the ServerContext with the new PipelineContext.
+// If the pipeline execution fails, an error message is printed to stderr, but the goroutine continues running.
+//
+// Parameters:
+//   - pl: The pipeline to process periodically
+//   - serverCtx: The server context to update with pipeline results
+//   - freq: The frequency at which to process the pipeline (e.g., 5m for every 5 minutes)
+//
+// This function is typically called at server startup to ensure TSLs are kept up-to-date.
 func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, freq time.Duration) error {
 	go func() {
 		for {
@@ -82,7 +91,18 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 }
 
 // RegisterAPIRoutes registers all API endpoints on the given Gin router using ServerContext.
+// It sets up the following endpoints:
+//
+// GET /status - Returns the current server status including TSL count and last processing time
+//
+// GET /info - Returns detailed summaries of all TSLs in the current pipeline context
+//
+// POST /authzen/decision - Implements the AuthZEN protocol for making trust decisions
+//   This endpoint processes AuthZEN EvaluationRequest objects containing x5c certificate
+//   chains and verifies them against the trusted certificates in the pipeline context.
 func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
+	// Status endpoint returns basic server status information
+	// including the count of TSLs and when the pipeline was last processed
 	r.GET("/status", func(c *gin.Context) {
 		serverCtx.RLock()
 		defer serverCtx.RUnlock()
@@ -96,6 +116,9 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		})
 	})
 
+	// AuthZEN decision endpoint implements the AuthZEN protocol for making trust decisions
+	// It processes AuthZEN EvaluationRequest objects containing x5c certificate chains
+	// and verifies them against the trusted certificates in the pipeline context
 	r.POST("/authzen/decision", func(c *gin.Context) {
 		var req authzen.EvaluationRequest
 		if err := c.BindJSON(&req); err != nil {
@@ -155,6 +178,8 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		}
 	})
 
+	// Info endpoint returns detailed information about all loaded TSLs
+	// It provides summaries of each TSL in the current pipeline context
 	r.GET("/info", func(c *gin.Context) {
 		serverCtx.RLock()
 		defer serverCtx.RUnlock()
