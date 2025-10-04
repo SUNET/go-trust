@@ -56,6 +56,12 @@
 //	--version      Show version information
 //	--help         Show help message
 //
+// Logging options:
+//
+//	--log-level    Logging level: debug, info, warn, error, fatal (default: info)
+//	--log-format   Logging format: text or json (default: text)
+//	--log-output   Log output: stdout, stderr, or file path (default: stdout)
+//
 // # API Endpoints
 //
 // The API server provides the following endpoints:
@@ -77,9 +83,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/SUNET/go-trust/pkg/api"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/pipeline"
 	"github.com/gin-gonic/gin"
 )
@@ -90,6 +99,37 @@ import (
 // this should be set to a specific version string using ldflags:
 // go build -ldflags "-X main.Version=1.0.0" ./cmd
 var Version = "dev"
+
+// parseLogLevel converts a string log level to the corresponding LogLevel enum value.
+// This is used to convert command-line arguments to the internal level representation.
+//
+// Valid values are:
+//   - "debug": Detailed debugging information (most verbose)
+//   - "info": Normal operation messages (default)
+//   - "warn" or "warning": Warning conditions
+//   - "error": Error conditions
+//   - "fatal": Critical conditions that require application termination
+//
+// If an invalid or unknown level is provided, the function returns InfoLevel
+// with a warning message printed to stderr.
+func parseLogLevel(level string) logging.LogLevel {
+	level = strings.ToLower(level)
+	switch level {
+	case "debug":
+		return logging.DebugLevel
+	case "info":
+		return logging.InfoLevel
+	case "warn", "warning":
+		return logging.WarnLevel
+	case "error":
+		return logging.ErrorLevel
+	case "fatal":
+		return logging.FatalLevel
+	default:
+		fmt.Fprintf(os.Stderr, "Warning: unknown log level '%s', using 'info'\n", level)
+		return logging.InfoLevel
+	}
+}
 
 // usage prints the command-line usage information to stderr.
 // It shows the available command-line options and their descriptions.
@@ -102,28 +142,44 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --host         API server hostname (default: 127.0.0.1)")
 	fmt.Fprintln(os.Stderr, "  --port         API server port (default: 6001)")
 	fmt.Fprintln(os.Stderr, "  --frequency    Pipeline update frequency (default: 5m)")
+	fmt.Fprintln(os.Stderr, "Logging options:")
+	fmt.Fprintln(os.Stderr, "  --log-level    Logging level: debug, info, warn, error, fatal (default: info)")
+	fmt.Fprintln(os.Stderr, "  --log-format   Logging format: text or json (default: text)")
+	fmt.Fprintln(os.Stderr, "  --log-output   Log output: stdout, stderr, or file path (default: stdout)")
 	fmt.Fprintln(os.Stderr, "")
 }
 
 // main is the entry point for the Go-Trust application.
 //
 // It performs the following operations:
-// 1. Parses command-line arguments and options
-// 2. Loads the specified pipeline YAML file
-// 3. Initializes the server context
-// 4. Starts a background updater to periodically process the pipeline
-// 5. Sets up the HTTP API server with Gin
-// 6. Starts the API server on the specified address and port
+// 1. Parses command-line arguments and options (including logging options)
+// 2. Configures structured logging based on command line arguments
+// 3. Loads the specified pipeline YAML file
+// 4. Initializes the server context with configured logger
+// 5. Starts a background updater to periodically process the pipeline
+// 6. Sets up the HTTP API server with Gin
+// 7. Starts the API server on the specified address and port
 //
 // The pipeline YAML file defines the steps to process Trust Status Lists (TSLs).
 // The processed TSLs are used by the API server to make trust decisions.
 // See the [pipeline.Pipeline] documentation for details on the pipeline format.
+//
+// Logging is configured using the --log-level, --log-format, and --log-output flags.
+// The log level determines which message severity levels are output (debug, info, warn, error, fatal).
+// The log format can be either human-readable text or structured JSON for machine processing.
+// Log output can be directed to stdout, stderr, or a file path.
 func main() {
 	showHelp := flag.Bool("help", false, "Show help message")
 	showVersion := flag.Bool("version", false, "Show version information")
 	host := flag.String("host", "127.0.0.1", "API server hostname")
 	port := flag.String("port", "6001", "API server port")
 	freq := flag.Duration("frequency", 5*time.Minute, "Pipeline update frequency (e.g. 10s, 1m, 5m)")
+
+	// Logging configuration
+	logLevel := flag.String("log-level", "info", "Logging level (debug, info, warn, error, fatal)")
+	logFormat := flag.String("log-format", "text", "Logging format (text, json)")
+	logOutput := flag.String("log-output", "stdout", "Log output (stdout, stderr, or file path)")
+
 	flag.Parse()
 
 	if *showHelp {
@@ -143,15 +199,51 @@ func main() {
 	}
 
 	pipelineFile := args[0]
+
+	// Configure logger based on command line arguments
+	parsedLogLevel := parseLogLevel(*logLevel)
+	var logger logging.Logger
+
+	if strings.ToLower(*logFormat) == "json" {
+		logger = logging.JSONLogger(parsedLogLevel)
+	} else {
+		logger = logging.NewLogger(parsedLogLevel)
+	}
+
+	// Configure log output
+	output := strings.ToLower(*logOutput)
+	switch output {
+	case "stdout":
+		// Default is already stdout
+	case "stderr":
+		logger.(logging.OutputConfigurable).SetOutput(os.Stderr)
+	default:
+		// Assume it's a file path
+		dir := filepath.Dir(*logOutput)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
+			os.Exit(1)
+		}
+
+		file, err := os.OpenFile(*logOutput, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+			os.Exit(1)
+		}
+		logger.(logging.OutputConfigurable).SetOutput(file)
+	}
+
+	// Configure pipeline with logger
 	pl, err := pipeline.NewPipeline(pipelineFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load pipeline: %v\n", err)
 		os.Exit(1)
 	}
+	pl.Logger = logger
 
-	serverCtx := &api.ServerContext{
-		PipelineContext: &pipeline.Context{},
-	}
+	// Create server context with logger
+	serverCtx := api.NewServerContext(logger)
+	serverCtx.PipelineContext = &pipeline.Context{}
 
 	// Start background updater
 	api.StartBackgroundUpdater(pl, serverCtx, *freq)
@@ -160,9 +252,18 @@ func main() {
 	r := gin.Default()
 	api.RegisterAPIRoutes(r, serverCtx)
 	listenAddr := fmt.Sprintf("%s:%s", *host, *port)
-	fmt.Printf("API server listening on %s\n", listenAddr)
+
+	// Log startup information
+	logger.Info("API server starting",
+		logging.F("address", listenAddr),
+		logging.F("version", Version),
+		logging.F("pipeline", pipelineFile),
+		logging.F("log_level", *logLevel))
+
 	if err := r.Run(listenAddr); err != nil {
-		fmt.Fprintf(os.Stderr, "API server error: %v\n", err)
+		logger.Error("API server failed to start",
+			logging.F("error", err.Error()),
+			logging.F("address", listenAddr))
 		os.Exit(1)
 	}
 }
