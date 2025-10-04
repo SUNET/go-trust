@@ -98,8 +98,9 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 // GET /info - Returns detailed summaries of all TSLs in the current pipeline context
 //
 // POST /authzen/decision - Implements the AuthZEN protocol for making trust decisions
-//   This endpoint processes AuthZEN EvaluationRequest objects containing x5c certificate
-//   chains and verifies them against the trusted certificates in the pipeline context.
+//
+//	This endpoint processes AuthZEN EvaluationRequest objects containing x5c certificate
+//	chains and verifies them against the trusted certificates in the pipeline context.
 func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 	// Status endpoint returns basic server status information
 	// including the count of TSLs and when the pipeline was last processed

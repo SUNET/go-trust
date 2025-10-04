@@ -11,13 +11,26 @@ import (
 	xmldsig "github.com/russellhaering/goxmldsig"
 )
 
-// FileSigner implements XMLSigner using certificate and private key files
+// FileSigner implements XMLSigner using certificate and private key files.
+// It uses file-based certificates and keys for signing XML documents.
+// The certificate and key files should be in PEM format.
 type FileSigner struct {
+	// CertFile is the path to the X.509 certificate file in PEM format
 	CertFile string
-	KeyFile  string
+
+	// KeyFile is the path to the private key file in PEM format (PKCS#1 or PKCS#8)
+	KeyFile string
 }
 
-// NewFileSigner creates a new FileSigner from certificate and key file paths
+// NewFileSigner creates a new FileSigner from certificate and key file paths.
+// This is a convenience constructor for the FileSigner struct.
+//
+// Parameters:
+//   - certFile: Path to the X.509 certificate file in PEM format
+//   - keyFile: Path to the private key file in PEM format (PKCS#1 or PKCS#8)
+//
+// Returns:
+//   - A new FileSigner instance configured with the provided files
 func NewFileSigner(certFile, keyFile string) *FileSigner {
 	return &FileSigner{
 		CertFile: certFile,
@@ -25,7 +38,18 @@ func NewFileSigner(certFile, keyFile string) *FileSigner {
 	}
 }
 
-// Sign implements XMLSigner.Sign using certificate and key files
+// Sign implements XMLSigner.Sign using certificate and key files.
+// This method loads the certificate and private key from files,
+// creates an XML digital signature, and returns the signed XML document.
+//
+// The method supports both PKCS#1 and PKCS#8 formatted private keys.
+//
+// Parameters:
+//   - xmlData: Raw XML bytes to sign
+//
+// Returns:
+//   - The signed XML document as bytes
+//   - An error if reading files, parsing certificates/keys, or signing fails
 func (fs *FileSigner) Sign(xmlData []byte) ([]byte, error) {
 	// Load the certificate and private key
 	certData, err := os.ReadFile(fs.CertFile)
@@ -84,18 +108,35 @@ func (fs *FileSigner) Sign(xmlData []byte) ([]byte, error) {
 	return SignXMLWithKeyStore(xmlData, keyStore)
 }
 
-// fileKeyStore implements the xmldsig.X509KeyStore interface
+// fileKeyStore implements the xmldsig.X509KeyStore interface.
+// It provides access to an in-memory certificate and private key
+// for XML digital signature operations.
 type fileKeyStore struct {
-	cert *x509.Certificate
-	key  *rsa.PrivateKey
+	cert *x509.Certificate // The parsed X.509 certificate
+	key  *rsa.PrivateKey   // The parsed RSA private key
 }
 
-// GetKeyPair returns the private key and certificate for signing
+// GetKeyPair returns the private key and certificate for signing.
+// This method implements the xmldsig.X509KeyStore interface.
+//
+// Returns:
+//   - The RSA private key for signing
+//   - The raw X.509 certificate bytes for inclusion in the signature
+//   - Always nil error as the keys are pre-loaded
 func (ks *fileKeyStore) GetKeyPair() (*rsa.PrivateKey, []byte, error) {
 	return ks.key, ks.cert.Raw, nil
 }
 
-// ToXMLDSigSigner converts a FileSigner to an xmldsig.Signer implementation
+// ToXMLDSigSigner converts a FileSigner to an xmldsig.Signer implementation.
+// This method loads the certificate and private key from files and creates
+// an xmldsig.Signer that can be used with the goxmldsig library directly.
+//
+// The method supports both PKCS#1 and PKCS#8 formatted private keys and
+// configures the signer to use SHA-256 for signatures.
+//
+// Returns:
+//   - An xmldsig.Signer implementation using the file-based certificate and key
+//   - An error if reading files, parsing certificates/keys fails
 func (fs *FileSigner) ToXMLDSigSigner() (xmldsig.Signer, error) {
 	// Load the certificate and private key
 	certData, err := os.ReadFile(fs.CertFile)

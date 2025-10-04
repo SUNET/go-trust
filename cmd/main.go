@@ -13,13 +13,13 @@
 //
 // Example pipeline YAML format:
 //
-//	- load:
-//	  - https://example.com/tsl.xml
-//	- transform:
-//	  - /path/to/stylesheet.xslt
-//	  - replace
-//	- publish:
-//	  - /path/to/output
+//   - load:
+//   - https://example.com/tsl.xml
+//   - transform:
+//   - /path/to/stylesheet.xslt
+//   - replace
+//   - publish:
+//   - /path/to/output
 //
 // # Available Pipeline Steps
 //

@@ -1,3 +1,5 @@
+// Package pipeline provides a framework for processing Trust Status Lists (TSLs)
+// using a sequence of configurable steps defined in YAML.
 package pipeline
 
 import (
@@ -7,12 +9,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Pipeline represents a list of Pipe steps
+// Pipeline represents a sequence of processing steps (Pipes) to be executed in order.
+// Each Pipe calls a registered function with specified arguments to process Trust Status Lists.
+// The Pipeline is typically loaded from a YAML configuration file.
 type Pipeline struct {
-	Pipes []Pipe
+	Pipes []Pipe // The ordered list of pipeline steps to execute
 }
 
-// Process iterates over the pipeline steps, passing and returning Context
+// Process executes all the steps in the pipeline in sequence, passing the Context from one step to the next.
+// Each step modifies the Context and returns either a modified Context or an error.
+// If a step returns an error, pipeline processing stops and the error is returned.
+//
+// Parameters:
+//   - ctx: The initial Context to pass to the first step of the pipeline
+//
+// Returns:
+//   - A pointer to the final Context after all steps have been executed
+//   - An error if any step fails
 func (pl *Pipeline) Process(ctx *Context) (*Context, error) {
 	for i, pipe := range pl.Pipes {
 		fn, ok := GetFunctionByName(pipe.MethodName)
@@ -28,7 +41,26 @@ func (pl *Pipeline) Process(ctx *Context) (*Context, error) {
 	return ctx, nil
 }
 
-// NewPipeline loads a YAML file and returns a Pipeline instance
+// NewPipeline loads a pipeline configuration from a YAML file and returns a new Pipeline instance.
+// The YAML file should contain a sequence of steps, where each step is a map with a single key
+// (the method name) and a list of string arguments.
+//
+// Example YAML format:
+//
+//   - load:
+//   - https://example.com/tsl.xml
+//   - transform:
+//   - /path/to/stylesheet.xslt
+//   - replace
+//   - publish:
+//   - /path/to/output
+//
+// Parameters:
+//   - filename: Path to the YAML configuration file
+//
+// Returns:
+//   - A new Pipeline instance with the steps loaded from the YAML file
+//   - An error if the file cannot be opened or parsed
 func NewPipeline(filename string) (*Pipeline, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -45,15 +77,29 @@ func NewPipeline(filename string) (*Pipeline, error) {
 	return &Pipeline{Pipes: pipes}, nil
 }
 
-// Pipe represents a method and its arguments in the pipeline
-
-// Pipe represents a method and its arguments in the pipeline, with custom unmarshalling
+// Pipe represents a single step in the pipeline with its method name and arguments.
+// It provides custom YAML unmarshalling to parse the pipeline configuration format.
+// Each Pipe corresponds to a registered StepFunc that will be executed during pipeline processing.
 type Pipe struct {
-	MethodName      string
-	MethodArguments []string
+	MethodName      string   // The name of the registered function to call
+	MethodArguments []string // The arguments to pass to the function
 }
 
-// UnmarshalYAML implements custom unmarshalling for Pipe
+// UnmarshalYAML implements the yaml.Unmarshaler interface for custom YAML parsing.
+// It expects a mapping node with exactly one key (the method name) and one value (a sequence of arguments).
+//
+// Example YAML structure:
+//
+//   - methodName:
+//   - arg1
+//   - arg2
+//   - arg3
+//
+// Parameters:
+//   - value: The YAML node to unmarshal
+//
+// Returns:
+//   - An error if the YAML structure doesn't match the expected format
 func (p *Pipe) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.MappingNode || len(value.Content) != 2 {
 		return &yaml.TypeError{Errors: []string{"Pipe must be a map with a single key (method name) and a list of arguments"}}

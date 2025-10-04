@@ -12,9 +12,9 @@ import (
 // This struct is used by API handlers to access the current state of Trust Status Lists (TSLs)
 // and certificate pools for making trust decisions.
 type ServerContext struct {
-	mu              sync.RWMutex     // Mutex for thread-safe access
+	mu              sync.RWMutex      // Mutex for thread-safe access
 	PipelineContext *pipeline.Context // The current pipeline context with TSLs and certificate pool
-	LastProcessed   time.Time        // Timestamp when the pipeline was last processed
+	LastProcessed   time.Time         // Timestamp when the pipeline was last processed
 }
 
 // Lock locks the ServerContext for writing.

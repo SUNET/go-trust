@@ -20,26 +20,26 @@ import (
 // specified directory.
 //
 // The step requires the 'xsltproc' command to be available on the system.
-// 
+//
 // Arguments:
 //   - arg[0]: Path to the XSLT stylesheet
-//   - arg[1]: Mode: "replace" or directory path. 
-//     - If "replace", transformed TSLs replace the originals in the context.
-//     - Otherwise, it's treated as a directory path where transformed TSLs are saved.
+//   - arg[1]: Mode: "replace" or directory path.
+//   - If "replace", transformed TSLs replace the originals in the context.
+//   - Otherwise, it's treated as a directory path where transformed TSLs are saved.
 //   - arg[2]: (Optional) Output file extension (default: "xml")
 //
 // Example usage in pipeline YAML:
 //
 //   - transform:
-//     - /path/to/stylesheet.xslt
-//     - replace
+//   - /path/to/stylesheet.xslt
+//   - replace
 //
 // OR
 //
 //   - transform:
-//     - /path/to/stylesheet.xslt
-//     - /output/directory
-//     - html
+//   - /path/to/stylesheet.xslt
+//   - /output/directory
+//   - html
 func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	if len(args) < 2 {
 		return ctx, fmt.Errorf("missing required arguments: need XSLT stylesheet path and mode ('replace' or output directory)")
