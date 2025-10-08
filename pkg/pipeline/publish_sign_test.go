@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/beevik/etree"
 )
 
@@ -41,7 +42,9 @@ func TestPublishTSL_WithSignature(t *testing.T) {
 	ctx.EnsureTSLStack().TSLs.Push(tsl)
 
 	// Run the PublishTSL function with signature
-	pl := &Pipeline{}
+	pl := &Pipeline{
+		Logger: logging.NewLogger(logging.DebugLevel),
+	}
 	result, err := PublishTSL(pl, ctx, tempDir, certFile, keyFile)
 	if err != nil {
 		t.Fatalf("PublishTSL failed: %v", err)

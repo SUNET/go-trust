@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/dsig"
@@ -542,7 +543,11 @@ func GenerateTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 // Parameters:
 //   - pl: Pipeline instance managing the step execution
 //   - ctx: Pipeline context containing state information
-//   - args: String slice where args[0] must be the URL or file path to the TSL
+//   - args: String slice where:
+//     - args[0] must be the URL or file path to the TSL
+//     - args[1:] can contain optional parameters in the format "key:value", such as:
+//       - user-agent:MyCustomUserAgent/1.0
+//       - timeout:30s (any valid Go duration string)
 //
 // Returns:
 //   - *Context: Updated context with the loaded TSL added to ctx.TSLs
@@ -551,14 +556,17 @@ func GenerateTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 // URL handling:
 //   - HTTP(S) URLs are used as-is
 //   - Local paths are converted to file:// URLs
-//   - The TSL is fetched and parsed using etsi119612.FetchTSL
+//   - The TSL is fetched and parsed using etsi119612.FetchTSLWithReferencesAndOptions
 //
 // The loaded TSL is pushed onto the context's TSL stack. If the stack doesn't exist,
 // a new one is created. Multiple calls to LoadTSL will result in multiple TSLs
 // being available in the context.
 //
 // Example usage in pipeline configuration:
-//   - load:http://example.com/tsl.xml  # Load from URL
+//   - load:
+//     - http://example.com/tsl.xml  # Load from URL
+//     - user-agent:MyCustomUserAgent/1.0
+//     - timeout:30s
 //   - load:/path/to/local/tsl.xml     # Load from local file
 func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	if len(args) < 1 {
@@ -569,8 +577,31 @@ func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "file://" + url
 	}
-
-	tsl, err := etsi119612.FetchTSL(url)
+	
+	// Ensure the TSLFetchOptions are initialized with default values if not set
+	ctx.EnsureTSLFetchOptions()
+	
+	// Check if we have any option overrides specified in the arguments
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, "user-agent:") {
+			ctx.TSLFetchOptions.UserAgent = strings.TrimPrefix(arg, "user-agent:")
+		} else if strings.HasPrefix(arg, "timeout:") {
+			timeoutStr := strings.TrimPrefix(arg, "timeout:")
+			if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+				ctx.TSLFetchOptions.Timeout = timeout
+			} else {
+				pl.Logger.Warn("Invalid timeout value", logging.F("timeout", timeoutStr), logging.F("error", err))
+			}
+		}
+	}
+	
+	pl.Logger.Debug("Loading TSL", 
+		logging.F("url", url), 
+		logging.F("user-agent", ctx.TSLFetchOptions.UserAgent),
+		logging.F("timeout", ctx.TSLFetchOptions.Timeout))
+		
+	tsl, err := etsi119612.FetchTSLWithReferencesAndOptions(url, *ctx.TSLFetchOptions)
 	if err != nil {
 		return ctx, fmt.Errorf("failed to load TSL from %s: %w", url, err)
 	}
@@ -580,6 +611,48 @@ func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 		logging.F("providers", len(tsl.StatusList.TslTrustServiceProviderList.TslTrustServiceProvider)))
 
 	ctx.EnsureTSLStack().TSLs.Push(tsl)
+	return ctx, nil
+}
+
+// SetFetchOptions is a pipeline step that configures the options for fetching Trust Status Lists.
+// This function sets up the user-agent, timeout, and other options used when fetching TSLs.
+//
+// Parameters:
+//   - pl: Pipeline instance managing the step execution
+//   - ctx: Pipeline context containing state information
+//   - args: String slice with options in the format "key:value", where key can be:
+//     - user-agent: Custom User-Agent header for HTTP requests
+//     - timeout: Maximum time to wait for HTTP requests (any valid Go duration string)
+//
+// Returns:
+//   - *Context: Updated context with the configured fetch options
+//   - error: Non-nil if an option cannot be parsed
+//
+// Example usage in pipeline configuration:
+//   - set-fetch-options:
+//     - user-agent:MyCustomUserAgent/1.0
+//     - timeout:60s
+func SetFetchOptions(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
+	// Ensure the TSLFetchOptions are initialized
+	ctx.EnsureTSLFetchOptions()
+	
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "user-agent:") {
+			ctx.TSLFetchOptions.UserAgent = strings.TrimPrefix(arg, "user-agent:")
+			pl.Logger.Debug("Set TSL fetch User-Agent", logging.F("user-agent", ctx.TSLFetchOptions.UserAgent))
+		} else if strings.HasPrefix(arg, "timeout:") {
+			timeoutStr := strings.TrimPrefix(arg, "timeout:")
+			if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+				ctx.TSLFetchOptions.Timeout = timeout
+				pl.Logger.Debug("Set TSL fetch timeout", logging.F("timeout", ctx.TSLFetchOptions.Timeout))
+			} else {
+				return ctx, fmt.Errorf("invalid timeout value: %s (%w)", timeoutStr, err)
+			}
+		} else {
+			pl.Logger.Warn("Unknown fetch option", logging.F("option", arg))
+		}
+	}
+	
 	return ctx, nil
 }
 
@@ -909,4 +982,5 @@ func init() {
 	RegisterFunction("generate", GenerateTSL)
 	RegisterFunction("publish", PublishTSL)
 	RegisterFunction("log", Log)
+	RegisterFunction("set-fetch-options", SetFetchOptions)
 }

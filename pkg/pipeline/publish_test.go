@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,7 +33,9 @@ func TestPublishStep(t *testing.T) {
 	ctx.EnsureTSLStack().TSLs.Push(tsl1)
 
 	// Test the publish step
-	pl := &Pipeline{}
+	pl := &Pipeline{
+		Logger: logging.NewLogger(logging.DebugLevel),
+	}
 	ctx, err = PublishTSL(pl, ctx, testDir)
 	assert.NoError(t, err)
 
@@ -73,7 +76,9 @@ func TestPublishStep(t *testing.T) {
 
 func TestPublishStep_Errors(t *testing.T) {
 	// Test case 1: Missing directory argument
-	pl := &Pipeline{}
+	pl := &Pipeline{
+		Logger: logging.NewLogger(logging.DebugLevel),
+	}
 	ctx := &Context{}
 	_, err := PublishTSL(pl, ctx)
 	assert.Error(t, err)

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"crypto/x509"
+	"time"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/utils"
@@ -11,9 +12,10 @@ import (
 // It contains Trust Status Lists (TSLs) and certificate pools that are created,
 // modified, and consumed by different pipeline steps.
 type Context struct {
-	TSLs     *utils.Stack[*etsi119612.TSL] // A stack of Trust Status Lists being processed
-	CertPool *x509.CertPool                // Certificate pool for trust verification
-	Data     map[string]any                // Data store for sharing information between pipeline steps
+	TSLs           *utils.Stack[*etsi119612.TSL] // A stack of Trust Status Lists being processed
+	CertPool       *x509.CertPool                // Certificate pool for trust verification
+	Data           map[string]any                // Data store for sharing information between pipeline steps
+	TSLFetchOptions *etsi119612.TSLFetchOptions   // Options for fetching Trust Status Lists
 }
 
 // EnsureTSLStack ensures that the TSL stack is initialized.
@@ -27,6 +29,24 @@ type Context struct {
 func (ctx *Context) EnsureTSLStack() *Context {
 	if ctx.TSLs == nil {
 		ctx.TSLs = utils.NewStack[*etsi119612.TSL]()
+	}
+	return ctx
+}
+
+// EnsureTSLFetchOptions ensures that the TSLFetchOptions are initialized.
+// If the options don't exist, it creates new ones with default values.
+//
+// This method is used by pipeline steps to guarantee that the TSLFetchOptions
+// are available before using them, preventing nil pointer exceptions.
+//
+// Returns:
+//   - The Context itself for method chaining
+func (ctx *Context) EnsureTSLFetchOptions() *Context {
+	if ctx.TSLFetchOptions == nil {
+		ctx.TSLFetchOptions = &etsi119612.TSLFetchOptions{
+			UserAgent: "Go-Trust/1.0 Pipeline (+https://github.com/SUNET/go-trust)",
+			Timeout:   30 * time.Second,
+		}
 	}
 	return ctx
 }
