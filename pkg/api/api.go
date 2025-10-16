@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/SUNET/go-trust/pkg/authzen"
@@ -296,4 +297,24 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 			"tsl_summaries": summaries,
 		})
 	})
+
+	// Test-mode shutdown endpoint
+	// This endpoint is only registered when GO_TRUST_TEST_MODE environment variable is set
+	// It allows integration tests to gracefully shutdown the server
+	if os.Getenv("GO_TRUST_TEST_MODE") == "1" {
+		r.POST("/test/shutdown", func(c *gin.Context) {
+			serverCtx.Logger.Info("Shutdown requested via /test/shutdown endpoint",
+				logging.F("remote_ip", c.ClientIP()))
+			
+			c.JSON(200, gin.H{"message": "shutting down"})
+			
+			// Trigger graceful shutdown after response is sent
+			go func() {
+				time.Sleep(100 * time.Millisecond) // Give time for response to be sent
+				os.Exit(0)
+			}()
+		})
+		
+		serverCtx.Logger.Warn("Test mode enabled: /test/shutdown endpoint is available")
+	}
 }
