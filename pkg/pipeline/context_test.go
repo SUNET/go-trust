@@ -6,6 +6,7 @@ import (
 
 	etsi119612 "github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/logging"
+	"github.com/SUNET/go-trust/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,6 +90,68 @@ func TestAddTSL_EdgeCases(t *testing.T) {
 		// Each TSL gets added twice - once directly and once via tree traversal
 		assert.Equal(t, 20, ctx.TSLs.Size())
 		assert.Equal(t, 10, ctx.TSLTrees.Size())
+	})
+
+	t.Run("Add TSL with references", func(t *testing.T) {
+		ctx := NewContext()
+
+		// Create a TSL with referenced TSLs (children)
+		childTSL1 := &etsi119612.TSL{Source: "child1.xml"}
+		childTSL2 := &etsi119612.TSL{Source: "child2.xml"}
+		rootTSL := &etsi119612.TSL{
+			Source:     "root.xml",
+			Referenced: []*etsi119612.TSL{childTSL1, childTSL2},
+		}
+
+		ctx.AddTSL(rootTSL)
+
+		// Should have 1 tree
+		assert.Equal(t, 1, ctx.TSLTrees.Size())
+
+		// The legacy stack should have all TSLs (root + children)
+		// AddTSLTree adds them via Traverse, plus AddTSL adds the root again
+		// So we get: children from tree + root from tree + root directly = 4 total
+		assert.Equal(t, 4, ctx.TSLs.Size())
+	})
+
+	t.Run("Method chaining works", func(t *testing.T) {
+		ctx := NewContext()
+
+		// AddTSL returns the context for chaining
+		result := ctx.AddTSL(&etsi119612.TSL{Source: "test.xml"})
+
+		assert.Equal(t, ctx, result)
+		assert.Equal(t, 1, ctx.TSLTrees.Size())
+	})
+
+	t.Run("TSLs stack is always initialized", func(t *testing.T) {
+		ctx := NewContext()
+
+		// NewContext already initializes the stack
+		assert.NotNil(t, ctx.TSLs)
+
+		// Add a TSL
+		ctx.AddTSL(&etsi119612.TSL{Source: "first.xml"})
+
+		// Stack should still be valid and have entries
+		assert.NotNil(t, ctx.TSLs)
+		assert.Equal(t, 2, ctx.TSLs.Size()) // Added twice (via tree and directly)
+	})
+
+	t.Run("Handles context with nil TSLs stack", func(t *testing.T) {
+		// Create a context manually (not via NewContext)
+		ctx := &Context{
+			TSLTrees: utils.NewStack[*TSLTree](),
+			TSLs:     nil, // Explicitly set to nil
+			Data:     make(map[string]any),
+		}
+
+		// AddTSLTree will initialize it
+		ctx.AddTSL(&etsi119612.TSL{Source: "test.xml"})
+
+		// Now it should be initialized
+		assert.NotNil(t, ctx.TSLs)
+		assert.Greater(t, ctx.TSLs.Size(), 0)
 	})
 }
 

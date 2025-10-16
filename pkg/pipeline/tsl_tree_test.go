@@ -348,15 +348,15 @@ func TestDepth(t *testing.T) {
 
 	t.Run("TSL with multiple branches uses maximum depth", func(t *testing.T) {
 		rootTSL := &etsi119612.TSL{Source: "root.xml"}
-		
+
 		// Branch 1: shallow (depth 1)
 		child1 := &etsi119612.TSL{Source: "child1.xml"}
-		
+
 		// Branch 2: deep (depth 3)
 		child2 := &etsi119612.TSL{Source: "child2.xml"}
 		grandchild := &etsi119612.TSL{Source: "grandchild.xml"}
 		greatgrandchild := &etsi119612.TSL{Source: "greatgrandchild.xml"}
-		
+
 		grandchild.Referenced = []*etsi119612.TSL{greatgrandchild}
 		child2.Referenced = []*etsi119612.TSL{grandchild}
 		rootTSL.Referenced = []*etsi119612.TSL{child1, child2}
@@ -374,7 +374,7 @@ func TestToSlice_EdgeCases(t *testing.T) {
 	t.Run("Nil root returns empty slice", func(t *testing.T) {
 		tree := &TSLTree{Root: nil}
 		slice := tree.ToSlice()
-		
+
 		if slice == nil {
 			t.Error("ToSlice should return empty slice, not nil")
 		}
@@ -386,9 +386,9 @@ func TestToSlice_EdgeCases(t *testing.T) {
 	t.Run("Single node tree", func(t *testing.T) {
 		tsl := &etsi119612.TSL{Source: "single.xml"}
 		tree := NewTSLTree(tsl)
-		
+
 		slice := tree.ToSlice()
-		
+
 		if len(slice) != 1 {
 			t.Errorf("Expected 1 TSL, got %d", len(slice))
 		}
@@ -402,14 +402,14 @@ func TestToSlice_EdgeCases(t *testing.T) {
 		child1 := &etsi119612.TSL{Source: "child1.xml"}
 		child2 := &etsi119612.TSL{Source: "child2.xml"}
 		root.Referenced = []*etsi119612.TSL{child1, child2}
-		
+
 		tree := NewTSLTree(root)
 		slice := tree.ToSlice()
-		
+
 		if len(slice) != 3 {
 			t.Errorf("Expected 3 TSLs, got %d", len(slice))
 		}
-		
+
 		// Check that all TSLs are present
 		sources := make(map[string]bool)
 		for _, tsl := range slice {
@@ -431,11 +431,11 @@ func TestTraverseNode_EdgeCases(t *testing.T) {
 	t.Run("Traverse handles nil node", func(t *testing.T) {
 		tree := &TSLTree{Root: nil}
 		count := 0
-		
+
 		tree.Traverse(func(tsl *etsi119612.TSL) {
 			count++
 		})
-		
+
 		if count != 0 {
 			t.Errorf("Traverse on nil root should not call function, got %d calls", count)
 		}
@@ -450,11 +450,11 @@ func TestTraverseNode_EdgeCases(t *testing.T) {
 			},
 		}
 		count := 0
-		
+
 		tree.Traverse(func(tsl *etsi119612.TSL) {
 			count++
 		})
-		
+
 		if count != 0 {
 			t.Errorf("Traverse on node with nil TSL should not call function, got %d calls", count)
 		}
