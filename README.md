@@ -220,7 +220,11 @@ The `key-label` and `cert-label` arguments specify the labels used to identify t
 Example pipeline configuration (YAML):
 
 ```yaml
-# Pipeline steps are defined as a sequence of operations
+# Pipeline YAML Format
+# IMPORTANT: Pipeline steps are defined as a direct sequence of operations
+# Each step is a mapping with a single key (the method name) and a list of arguments
+# Do NOT use a "steps:" key in your YAML - steps are defined directly at the top level
+
 - generate: ["./example/example-tsl"]  # Generate TSL from directory
 - select: []                          # Extract certificates into a pool
 - publish: ["./output"]               # Publish TSLs as XML files
@@ -391,19 +395,21 @@ The logging system is designed with the following features:
 - **Context Awareness**: Logging with context propagation
 - **Extensible**: Support for different logging backends through adapters
 
-### Using Logging in Pipeline Configuration
+### Logging Configuration
 
-Pipeline YAML configurations support logging configuration through a dedicated `config` section:
+Logging is configured through command-line arguments, not in pipeline YAML files:
+
+```bash
+# Configure logging via command line
+./gt --log-level debug --log-format json ./pipeline.yaml
+```
+
+Logging statements in pipeline steps:
 
 ```yaml
-config:
-  logging:
-    level: info    # debug, info, warn, error, or fatal
-    format: text   # text or json
-
-pipes:
-  - log:
-  - "Processing TSL files"
+# Example logging in pipeline
+- log:
+    - "Processing TSL files"
   - count=5
   - source=example.com
   

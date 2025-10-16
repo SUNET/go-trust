@@ -1,81 +1,125 @@
-````markdown
-# Examples
+# TSL Pipeline Examples
 
-This directory contains examples for using the go-trust library.
+This directory contains example configurations for the go-trust TSL pipeline processing system.
 
-## XSLT Stylesheet for TSL Visualization
+## YAML Configuration Format
 
-The `tsl-to-html.xslt` file is an XSLT stylesheet that transforms ETSI TS 119 612 Trust Status Lists (TSLs) into comprehensive, user-friendly HTML documents. This makes it easy to visualize and navigate complex TSL data.
+Pipeline configurations are defined in YAML with a sequence of steps. Each step has a function name (like `load` or `transform`) and a list of arguments:
 
-### Using the Stylesheet
+```yaml
+# Example pipeline structure
+- function-name:
+    - argument1
+    - argument2
+    
+- another-function:
+    - argument
+```
 
-You can use this stylesheet with any standard XSLT processor:
+Note that there is **no `steps:` key** at the root level - the pipeline is a direct list of steps.
+
+### Configuration Guidelines
+
+IMPORTANT: Pipeline YAML files should:
+- ONLY contain pipeline steps
+- NOT include configuration such as `debug: true`
+- NOT include any global configuration parameters
+
+All configuration should be provided through command-line arguments when running the pipeline:
 
 ```bash
-# Using xsltproc
-xsltproc tsl-to-html.xslt path/to/tsl.xml > tsl.html
-
-# Using Saxon
-java -jar saxon.jar -s:path/to/tsl.xml -xsl:tsl-to-html.xslt -o:tsl.html
+# Example: Enable debug mode through command line
+gt --debug example/basic-usage.yaml
 ```
 
-### Using with the Pipeline
+## Example Files
 
-This stylesheet is also available as an embedded resource in the Go-Trust binary. You can use it in two ways:
+### 1. `basic-usage.yaml`
 
-#### External File (this directory)
+A simple example showing the core functionality:
+
+- Loading a TSL from a URL
+- Setting basic fetch options
+- Creating a certificate pool
+- Publishing the TSL to a local directory
+
+### 2. `tsl-tree-publishing.yaml`
+
+Demonstrates tree structure publishing with filtering:
+
+- Loading a TSL with reference depth control
+- Filtering by territory and service type
+- Publishing with territory-based and index-based directory structures
+- Creating filtered certificate pools
+
+### 3. `api-and-html.yaml`
+
+Shows integration with the API and HTML transformation:
+
+- Loading TSLs for API access
+- Transforming TSLs to HTML with XSLT
+- Generating index pages
+- Creating certificate pools with different filtering criteria
+
+### 4. `custom-tsl-generation.yaml`
+
+Demonstrates generating TSLs from metadata files:
+
+- Creating TSLs from directory-based metadata
+- Validating generated TSLs
+- Optionally signing TSLs
+- Publishing in different formats
+
+## Using These Examples
+
+To run these examples, use the gt pipeline command:
+
+```bash
+gt example/basic-usage.yaml
+```
+
+## Common Pipeline Steps
+
+| Step Name | Description | Example Usage |
+|-----------|-------------|--------------|
+| `load` | Load a TSL from a URL or file | `- load: [https://example.com/tsl.xml]` |
+| `set-fetch-options` | Configure fetch depth and filters | `- set-fetch-options: [max-depth:2, timeout:60s]` |
+| `transform` | Apply an XSLT transformation | `- transform: [stylesheet.xslt, ./output, html]` |
+| `publish` | Publish TSLs to a directory | `- publish: [./output]` |
+| `log` | Log information | `- log: ["Loaded %d TSLs"]` |
+| `select` | Extract certificates | `- select: [all]` |
+| `generate` | Generate a TSL from metadata | `- generate: [./metadata-dir]` |
+| `generate_index` | Create an index page | `- generate_index: [./output, "Title"]` |
+
+## Tree Structure Publishing
+
+When publishing, you can maintain the tree structure using these formats:
+
 ```yaml
-- transform:
-- path/to/example/tsl-to-html.xslt
-- /output/directory
-- html
+# Territory-based directories
+- publish:
+    - ./output
+    - tree:territory
+
+# Index-based directories
+- publish:
+    - ./output
+    - tree:index
 ```
 
-#### Embedded File (no external dependencies)
+## Certificate Selection and Filtering
+
 ```yaml
-- transform:
-- embedded:tsl-to-html.xslt
-- /output/directory
-- html
-```
+# Select all certificates
+- select:
+    - all
 
-See the `embedded-transform.yaml` file in this directory for a complete example pipeline using the embedded stylesheet.
-
-#### Programmatic Usage
-```go
-// Example code for transforming a TSL using the XSLT stylesheet
-func TransformTSL(tslPath, outputPath string) error {
-    p := pipeline.NewPipeline()
-    p.AddStep(pipeline.NewLoadStep(tslPath))
+# Filter by service type
+- select:
+    - service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC
     
-    // Use the embedded stylesheet
-    p.AddStep(pipeline.NewTransformStep("embedded:tsl-to-html.xslt", outputPath, "html"))
-    
-    return p.Execute()
-}
+# Filter by status with AND logic
+- select:
+    - status-logic:and
+    - status:http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted
 ```
-
-## example-tsl
-
-The `example-tsl` directory contains an example of a Trust Service List (TSL) directory structure that can be used with the `generate` pipeline step. This demonstrates how to organize trust service providers, their certificates, and metadata.
-
-Structure:
-- `scheme.yaml`: Contains the TSL scheme metadata (operator names, TSL type, etc.)
-- `providers/`: Directory containing trust service providers
-  - `example-provider/`: A sample trust service provider
-    - `provider.yaml`: Provider metadata
-    - `example.pem`: A certificate in PEM format
-    - `example.yaml`: Certificate metadata
-
-You can use this example with the pipeline as follows:
-
-```yaml
-- generate: ["/path/to/go-trust/example/example-tsl"]
-- select: []  # Create a certificate pool from the generated TSL
-- publish: ["/path/to/output"]  # Optional: Export the TSL as XML
-```
-
-This will:
-1. Generate a TSL from the example directory structure
-2. Create a certificate pool for validation
-3. Export the TSL as XML files to the specified output directory
