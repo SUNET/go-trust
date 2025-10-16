@@ -66,6 +66,9 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 // and updates the ServerContext with the new pipeline results. The updated context is then
 // used by API handlers to respond to requests with fresh data.
 //
+// The pipeline is processed immediately upon calling this function, before starting the
+// background updates. This ensures TSLs are available as soon as the server starts.
+//
 // Success and failure events are logged using the ServerContext's structured logger:
 // - On success: An info-level message with the update frequency
 // - On failure: An error-level message with the error details and frequency
@@ -77,8 +80,26 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 //
 // This function is typically called at server startup to ensure TSLs are kept up-to-date.
 func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, freq time.Duration) error {
+	// Process pipeline immediately to ensure TSLs are loaded without waiting
+	newCtx, err := pl.Process(&pipeline.Context{})
+	serverCtx.Lock()
+	if err == nil && newCtx != nil {
+		serverCtx.PipelineContext = newCtx
+		serverCtx.LastProcessed = time.Now()
+		tslCount := countTSLs(newCtx)
+		serverCtx.Logger.Info("Initial pipeline processing successful",
+			logging.F("tsl_count", tslCount))
+	} else if err != nil {
+		serverCtx.Logger.Error("Initial pipeline processing failed",
+			logging.F("error", err.Error()))
+	}
+	serverCtx.Unlock()
+
+	// Start background processing
 	go func() {
 		for {
+			time.Sleep(freq)
+
 			newCtx, err := pl.Process(&pipeline.Context{})
 			serverCtx.Lock()
 			if err == nil && newCtx != nil {
@@ -93,13 +114,23 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 					logging.F("frequency", freq.String()))
 			} else {
 				// Log successful update
+				tslCount := countTSLs(newCtx)
 				serverCtx.Logger.Info("Pipeline processed successfully",
-					logging.F("frequency", freq.String()))
+					logging.F("frequency", freq.String()),
+					logging.F("tsl_count", tslCount))
 			}
-			time.Sleep(freq)
 		}
 	}()
 	return nil
+}
+
+// countTSLs counts the number of TSLs in the pipeline context.
+// This is a helper function to provide consistent TSL counting for logging.
+func countTSLs(ctx *pipeline.Context) int {
+	if ctx == nil || ctx.TSLs == nil {
+		return 0
+	}
+	return ctx.TSLs.Size()
 }
 
 // NewServerContext creates a new ServerContext with a configured logger.
@@ -136,12 +167,12 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
 			tslCount = serverCtx.PipelineContext.TSLs.Size()
 		}
-		
+
 		// Log the status request with structured logging
 		serverCtx.Logger.Info("API status request",
 			logging.F("remote_ip", c.ClientIP()),
 			logging.F("tsl_count", tslCount))
-		
+
 		c.JSON(200, gin.H{
 			"tsl_count":      tslCount,
 			"last_processed": serverCtx.LastProcessed.Format("2006-01-02T15:04:05Z07:00"),
@@ -161,7 +192,7 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 			c.JSON(400, gin.H{"error": "invalid request"})
 			return
 		}
-		
+
 		// Log valid request
 		serverCtx.Logger.Debug("Processing AuthZEN request",
 			logging.F("remote_ip", c.ClientIP()))
@@ -236,6 +267,18 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		serverCtx.RLock()
 		defer serverCtx.RUnlock()
 		summaries := make([]map[string]interface{}, 0)
+
+		// Add debug logging to inspect the pipeline context
+		tslSize := 0
+		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
+			tslSize = serverCtx.PipelineContext.TSLs.Size()
+		}
+
+		serverCtx.Logger.Debug("API info request: Inspecting pipeline context",
+			logging.F("ctx_nil", serverCtx.PipelineContext == nil),
+			logging.F("tsls_nil", serverCtx.PipelineContext == nil || serverCtx.PipelineContext.TSLs == nil),
+			logging.F("tsls_size", tslSize))
+
 		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
 			for _, tsl := range serverCtx.PipelineContext.TSLs.ToSlice() {
 				if tsl != nil {
@@ -243,12 +286,12 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 				}
 			}
 		}
-		
+
 		// Log info request with structured logging
 		serverCtx.Logger.Info("API info request",
 			logging.F("remote_ip", c.ClientIP()),
 			logging.F("summary_count", len(summaries)))
-		
+
 		c.JSON(200, gin.H{
 			"tsl_summaries": summaries,
 		})

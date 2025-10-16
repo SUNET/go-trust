@@ -59,7 +59,7 @@ func (s *ServerContext) WithLogger(logger logging.Logger) *ServerContext {
 
 	s.RLock()
 	defer s.RUnlock()
-	
+
 	return &ServerContext{
 		PipelineContext: s.PipelineContext,
 		LastProcessed:   s.LastProcessed,
