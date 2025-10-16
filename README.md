@@ -105,7 +105,11 @@ Go-Trust includes a dedicated package for XML digital signatures in [pkg/dsig](.
 
 ### Command Line Interface
 
-Go-Trust provides a command line interface for processing TSLs and managing trust decisions:
+Go-Trust provides a flexible command line interface with two operating modes:
+
+#### API Server Mode (Default)
+
+Run as a continuous service with periodic TSL processing:
 
 ```bash
 # Run the trust service with a pipeline configuration
@@ -113,6 +117,55 @@ Go-Trust provides a command line interface for processing TSLs and managing trus
 
 # Run with custom settings
 ./gt --host 0.0.0.0 --port 8080 --frequency 1h ./pipeline.yaml
+
+# With logging configuration
+./gt --log-level debug --log-format json ./pipeline.yaml
+```
+
+#### Command-Line Processing Mode
+
+Process pipelines once and exit (no API server):
+
+```bash
+# One-shot pipeline execution
+./gt --no-server ./pipeline.yaml
+
+# With debug logging
+./gt --no-server --log-level debug ./pipeline.yaml
+
+# With JSON logging for parsing
+./gt --no-server --log-format json ./pipeline.yaml > output.json
+
+# In a cron job (daily HTML generation)
+0 2 * * * /usr/local/bin/gt --no-server /etc/go-trust/daily-processing.yaml
+
+# In CI/CD pipelines
+./gt --no-server --log-format json ./ci-pipeline.yaml
+```
+
+The `--no-server` flag is useful for:
+- **Batch processing**: Transform TSLs without running a server
+- **CI/CD pipelines**: Generate reports in build systems
+- **Scheduled jobs**: Cron jobs for periodic processing
+- **Development**: Quick testing of pipeline configurations
+
+See [example/cmdline-processing.yaml](./example/cmdline-processing.yaml) for a complete example.
+
+#### Command-Line Options
+
+```
+Usage: gt [options] <pipeline.yaml>
+Options:
+  --help         Show this help message and exit
+  --version      Show version information and exit
+  --host         API server hostname (default: 127.0.0.1)
+  --port         API server port (default: 6001)
+  --frequency    Pipeline update frequency (default: 5m)
+  --no-server    Run pipeline once and exit (no API server)
+Logging options:
+  --log-level    Logging level: debug, info, warn, error, fatal (default: info)
+  --log-format   Logging format: text or json (default: text)
+  --log-output   Log output: stdout, stderr, or file path (default: stdout)
 ```
 
 ### API Endpoints
