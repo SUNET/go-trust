@@ -5,7 +5,6 @@ package pipeline
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/SUNET/go-trust/pkg/logging"
 	"gopkg.in/yaml.v3"
@@ -13,14 +12,16 @@ import (
 
 // Pipeline represents a sequence of processing steps (Pipes) to be executed in order.
 // Each Pipe calls a registered function with specified arguments to process Trust Status Lists.
-// The Pipeline is typically loaded from a YAML configuration file.
+// The Pipeline is typically loaded from a YAML file that defines a list of steps.
 //
 // The Pipeline always has a Logger available for use by pipeline steps.
 // If no logger is specified during initialization, a default logger is used.
+//
+// Note: Configuration is NOT stored in the pipeline YAML. All configuration should
+// be provided via command line arguments. Pipeline YAML files should contain only steps.
 type Pipeline struct {
-	Pipes  []Pipe                    // The ordered list of pipeline steps to execute
-	Logger logging.Logger            // Logger for pipeline operations (never nil)
-	Config map[string]map[string]any // Configuration for pipeline steps
+	Pipes  []Pipe         // The ordered list of pipeline steps to execute
+	Logger logging.Logger // Logger for pipeline operations (never nil)
 }
 
 // Process executes all the steps in the pipeline in sequence, passing the Context from one step to the next.
@@ -48,21 +49,25 @@ func (pl *Pipeline) Process(ctx *Context) (*Context, error) {
 	return ctx, nil
 }
 
-// NewPipeline loads a pipeline configuration from a YAML file and returns a new Pipeline instance.
-// The YAML file should contain a sequence of steps, where each step is a map with a single key
+// NewPipeline loads a pipeline from a YAML file and returns a new Pipeline instance.
+// The YAML file must contain a sequence of steps, where each step is a map with a single key
 // (the method name) and a list of string arguments.
+//
+// IMPORTANT: The pipeline YAML should only contain steps, not configuration.
+// All configuration should be provided via command-line arguments.
 //
 // Example YAML format:
 //
+//   # Pipeline steps as a direct list (no 'steps:' or 'config:' keys)
 //   - load:
-//   - https://example.com/tsl.xml
+//   	- https://example.com/tsl.xml
 //   - transform:
-//   - /path/to/stylesheet.xslt
+//   	- /path/to/stylesheet.xslt
 //   - publish:
-//   - /path/to/output
+//   	- /path/to/output
 //
 // Parameters:
-//   - filename: Path to the YAML configuration file
+//   - filename: Path to the YAML pipeline file
 //
 // Returns:
 //   - A new Pipeline instance with the steps loaded from the YAML file
@@ -74,66 +79,20 @@ func NewPipeline(filename string) (*Pipeline, error) {
 	}
 	defer file.Close()
 
-	// Always start with a default logger that will be used if no configuration is provided
+	// Always use the default logger - configuration should come from cmdline args, not pipeline files
 	logger := logging.DefaultLogger()
 
-	// First try to decode a full pipeline configuration with config sections
-	var pipelineConfig struct {
-		Pipes  []Pipe                    `yaml:"pipes"`
-		Config map[string]map[string]any `yaml:"config"`
-	}
-
+	// Parse the pipeline as a simple list of pipes (no config sections)
+	var pipes []Pipe
 	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&pipelineConfig); err != nil {
-		// If that fails, try the legacy format which is just an array of pipes
-		file.Seek(0, 0) // Reset file position
-		var pipes []Pipe
-		decoder = yaml.NewDecoder(file)
-		if err := decoder.Decode(&pipes); err != nil {
-			return nil, err
-		}
-
-		// Use the default logger with legacy format
-		return &Pipeline{
-			Pipes:  pipes,
-			Logger: logger,
-			Config: make(map[string]map[string]any),
-		}, nil
+	if err := decoder.Decode(&pipes); err != nil {
+		return nil, fmt.Errorf("failed to parse pipeline YAML: %w", err)
 	}
 
-	// Handle logging configuration if present
-	if logConfig, ok := pipelineConfig.Config["logging"]; ok {
-		if levelStr, ok := logConfig["level"].(string); ok {
-			var level logging.LogLevel
-			switch strings.ToLower(levelStr) {
-			case "debug":
-				level = logging.DebugLevel
-			case "info":
-				level = logging.InfoLevel
-			case "warn":
-				level = logging.WarnLevel
-			case "error":
-				level = logging.ErrorLevel
-			case "fatal":
-				level = logging.FatalLevel
-			default:
-				level = logging.InfoLevel
-			}
-			logger = logging.NewLogger(level)
-		}
-
-		if format, ok := logConfig["format"].(string); ok && format == "json" {
-			level := logger.GetLevel()
-			{
-				logger = logging.JSONLogger(level)
-			}
-		}
-	}
-
+	// Create a new pipeline with the parsed pipes
 	return &Pipeline{
-		Pipes:  pipelineConfig.Pipes,
+		Pipes:  pipes,
 		Logger: logger,
-		Config: pipelineConfig.Config,
 	}, nil
 }
 
@@ -151,9 +110,9 @@ type Pipe struct {
 // Example YAML structure:
 //
 //   - methodName:
-//   - arg1
-//   - arg2
-//   - arg3
+//   	- arg1
+//   	- arg2
+//   	- arg3
 //
 // Parameters:
 //   - value: The YAML node to unmarshal
@@ -179,13 +138,13 @@ func (p *Pipe) UnmarshalYAML(value *yaml.Node) error {
 
 // WithLogger returns a new Pipeline with the specified logger.
 // This allows for easy reconfiguration of the logger while preserving
-// the rest of the pipeline configuration.
+// the rest of the pipeline steps.
 //
 // Parameters:
 //   - logger: The new logger to use for the pipeline
 //
 // Returns:
-//   - A new Pipeline instance with the same configuration but using the specified logger
+//   - A new Pipeline instance with the same steps but using the specified logger
 func (pl *Pipeline) WithLogger(logger logging.Logger) *Pipeline {
 	if logger == nil {
 		logger = logging.DefaultLogger()
@@ -193,6 +152,5 @@ func (pl *Pipeline) WithLogger(logger logging.Logger) *Pipeline {
 	return &Pipeline{
 		Pipes:  pl.Pipes,
 		Logger: logger,
-		Config: pl.Config,
 	}
 }

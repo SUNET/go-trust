@@ -24,9 +24,9 @@ import (
 // processes the context according to its logic, and returns either a modified context or an error.
 //
 // Parameters:
-//   - pl: The pipeline instance (useful for accessing pipeline-wide configuration)
+//   - pl: The pipeline instance (provides access to the logger)
 //   - ctx: The current context with TSLs and certificate pools
-//   - args: String arguments from the pipeline configuration
+//   - args: String arguments from the pipeline step definition
 //
 // Returns:
 //   - A modified Context after processing
