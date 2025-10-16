@@ -369,3 +369,60 @@ func TestDepth(t *testing.T) {
 		}
 	})
 }
+
+func TestToSlice_EdgeCases(t *testing.T) {
+	t.Run("Nil root returns empty slice", func(t *testing.T) {
+		tree := &TSLTree{Root: nil}
+		slice := tree.ToSlice()
+		
+		if slice == nil {
+			t.Error("ToSlice should return empty slice, not nil")
+		}
+		if len(slice) != 0 {
+			t.Errorf("ToSlice with nil root should return empty slice, got %d elements", len(slice))
+		}
+	})
+
+	t.Run("Single node tree", func(t *testing.T) {
+		tsl := &etsi119612.TSL{Source: "single.xml"}
+		tree := NewTSLTree(tsl)
+		
+		slice := tree.ToSlice()
+		
+		if len(slice) != 1 {
+			t.Errorf("Expected 1 TSL, got %d", len(slice))
+		}
+		if slice[0].Source != "single.xml" {
+			t.Errorf("Expected source 'single.xml', got '%s'", slice[0].Source)
+		}
+	})
+
+	t.Run("Tree with multiple nodes", func(t *testing.T) {
+		root := &etsi119612.TSL{Source: "root.xml"}
+		child1 := &etsi119612.TSL{Source: "child1.xml"}
+		child2 := &etsi119612.TSL{Source: "child2.xml"}
+		root.Referenced = []*etsi119612.TSL{child1, child2}
+		
+		tree := NewTSLTree(root)
+		slice := tree.ToSlice()
+		
+		if len(slice) != 3 {
+			t.Errorf("Expected 3 TSLs, got %d", len(slice))
+		}
+		
+		// Check that all TSLs are present
+		sources := make(map[string]bool)
+		for _, tsl := range slice {
+			sources[tsl.Source] = true
+		}
+		if !sources["root.xml"] {
+			t.Error("Missing root.xml in slice")
+		}
+		if !sources["child1.xml"] {
+			t.Error("Missing child1.xml in slice")
+		}
+		if !sources["child2.xml"] {
+			t.Error("Missing child2.xml in slice")
+		}
+	})
+}
