@@ -11,6 +11,7 @@ import (
 	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -354,4 +355,128 @@ func TestPipe_UnmarshalYAML_Errors(t *testing.T) {
 	err = yaml.Unmarshal([]byte(yamlData), &pipes)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Pipe arguments must be a sequence")
+}
+
+// TestSetFetchOptions_EdgeCases tests additional edge cases for SetFetchOptions
+func TestSetFetchOptions_EdgeCases(t *testing.T) {
+	t.Run("max-depth zero disables references", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx, "max-depth:0")
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, ctx.TSLFetchOptions.MaxDereferenceDepth)
+	})
+
+	t.Run("max-depth negative enables unlimited", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx, "max-depth:-1")
+
+		require.NoError(t, err)
+		assert.Equal(t, -1, ctx.TSLFetchOptions.MaxDereferenceDepth)
+	})
+
+	t.Run("prefer-xml with various truthy values", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+
+		testCases := []struct {
+			value    string
+			expected bool
+		}{
+			{"true", true},
+			{"1", true},
+			{"yes", true},
+			{"false", false},
+			{"0", false},
+			{"no", false},
+			{"", false},
+		}
+
+		for _, tc := range testCases {
+			ctx := NewContext()
+			ctx, err := SetFetchOptions(pl, ctx, "prefer-xml:"+tc.value)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, ctx.Data["prefer_xml_over_pdf"],
+				"prefer-xml:%s should result in %v", tc.value, tc.expected)
+		}
+	})
+
+	t.Run("filter-territory empty value", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx, "filter-territory:")
+
+		require.NoError(t, err)
+		filters := ctx.Data["tsl_filters"].(map[string][]string)
+		assert.NotContains(t, filters, "territory")
+	})
+
+	t.Run("filter-service-type empty value", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx, "filter-service-type:")
+
+		require.NoError(t, err)
+		filters := ctx.Data["tsl_filters"].(map[string][]string)
+		assert.NotContains(t, filters, "service-type")
+	})
+
+	t.Run("accept headers with whitespace trimming", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx, "accept:  application/xml  , text/xml , application/pdf  ")
+
+		require.NoError(t, err)
+		require.Len(t, ctx.TSLFetchOptions.AcceptHeaders, 3)
+		assert.Equal(t, "application/xml", ctx.TSLFetchOptions.AcceptHeaders[0])
+		assert.Equal(t, "text/xml", ctx.TSLFetchOptions.AcceptHeaders[1])
+		assert.Equal(t, "application/pdf", ctx.TSLFetchOptions.AcceptHeaders[2])
+	})
+
+	t.Run("empty accept resets to defaults", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+		ctx.EnsureTSLFetchOptions()
+
+		// Set custom headers
+		ctx.TSLFetchOptions.AcceptHeaders = []string{"custom/type"}
+
+		// Reset with empty value
+		ctx, err := SetFetchOptions(pl, ctx, "accept:")
+
+		require.NoError(t, err)
+		// Should not be the custom value anymore
+		assert.NotEqual(t, []string{"custom/type"}, ctx.TSLFetchOptions.AcceptHeaders)
+	})
+
+	t.Run("unknown option does not error", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx, "unknown-option:some-value")
+
+		require.NoError(t, err)
+		assert.NotNil(t, ctx)
+	})
+
+	t.Run("mix of valid and unknown options", func(t *testing.T) {
+		pl := &Pipeline{Logger: logging.NewLogger(logging.InfoLevel)}
+		ctx := NewContext()
+
+		ctx, err := SetFetchOptions(pl, ctx,
+			"user-agent:Test/1.0",
+			"unknown:value",
+			"timeout:30s",
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "Test/1.0", ctx.TSLFetchOptions.UserAgent)
+		assert.Equal(t, 30*time.Second, ctx.TSLFetchOptions.Timeout)
+	})
 }
