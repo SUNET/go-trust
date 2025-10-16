@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/pipeline"
 	"github.com/SUNET/go-trust/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -228,6 +229,7 @@ func setupTestServer() (*gin.Engine, *ServerContext) {
 			CertPool: certPool,
 		},
 		LastProcessed: time.Now(),
+		Logger:        logging.DefaultLogger(), // Initialize logger to prevent nil pointer panics
 	}
 	// Store the certBase64 for use in tests
 	RegisterAPIRoutes(r, serverCtx)
@@ -392,8 +394,13 @@ func TestStartBackgroundUpdater(t *testing.T) {
 		return &pipeline.Context{TSLs: stack}, nil
 	})
 	pipes := []pipeline.Pipe{{MethodName: "mockstep", MethodArguments: []string{}}}
-	pl := &pipeline.Pipeline{Pipes: pipes}
-	serverCtx := &ServerContext{}
+	pl := &pipeline.Pipeline{
+		Pipes:  pipes,
+		Logger: logging.DefaultLogger(), // Initialize pipeline logger
+	}
+	serverCtx := &ServerContext{
+		Logger: logging.DefaultLogger(), // Initialize server context logger
+	}
 	interval := 10 * time.Millisecond
 	_ = StartBackgroundUpdater(pl, serverCtx, interval)
 
