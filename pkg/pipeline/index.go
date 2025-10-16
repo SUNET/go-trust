@@ -226,14 +226,14 @@ func generateIndexHTML(dirPath string, entries []TSLIndexEntry, title string) er
 		Title         string
 		Entries       []TSLIndexEntry
 		GeneratedDate string
-		CSS           string
-		JavaScript    string
+		CSS           template.CSS
+		JavaScript    template.JS
 	}{
 		Title:         title,
 		Entries:       entries,
 		GeneratedDate: time.Now().Format("2006-01-02"),
-		CSS:           indexCSS,
-		JavaScript:    indexJavaScript,
+		CSS:           template.CSS(indexCSS),
+		JavaScript:    template.JS(indexJavaScript),
 	}
 
 	// Parse and execute the template
