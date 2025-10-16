@@ -58,13 +58,13 @@ func (pl *Pipeline) Process(ctx *Context) (*Context, error) {
 //
 // Example YAML format:
 //
-//   # Pipeline steps as a direct list (no 'steps:' or 'config:' keys)
-//   - load:
-//   	- https://example.com/tsl.xml
-//   - transform:
-//   	- /path/to/stylesheet.xslt
-//   - publish:
-//   	- /path/to/output
+//	# Pipeline steps as a direct list (no 'steps:' or 'config:' keys)
+//	- load:
+//		- https://example.com/tsl.xml
+//	- transform:
+//		- /path/to/stylesheet.xslt
+//	- publish:
+//		- /path/to/output
 //
 // Parameters:
 //   - filename: Path to the YAML pipeline file
@@ -110,9 +110,9 @@ type Pipe struct {
 // Example YAML structure:
 //
 //   - methodName:
-//   	- arg1
-//   	- arg2
-//   	- arg3
+//   - arg1
+//   - arg2
+//   - arg3
 //
 // Parameters:
 //   - value: The YAML node to unmarshal
