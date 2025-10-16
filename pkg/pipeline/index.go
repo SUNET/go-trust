@@ -223,16 +223,100 @@ func generateIndexHTML(dirPath string, entries []TSLIndexEntry, title string) er
         :root {
             --badge-qualified-bg: #27ae60;
             --badge-nonqualified-bg: #f39c12;
+            --badge-info-bg: #3498db;
         }
         
+        body {
+            padding-bottom: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+        }
+
+        /* Header Improvements */
+        header {
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            padding: 1rem;
+            border-radius: 8px;
+            background-color: var(--card-background-color);
+            border: 1px solid var(--card-border-color);
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card .label {
+            font-size: 0.9rem;
+            color: var(--muted-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Search and Filter */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+
+        .controls input[type="search"] {
+            flex: 1;
+            min-width: 250px;
+            margin-bottom: 0;
+        }
+
+        .controls select {
+            min-width: 150px;
+            margin-bottom: 0;
+        }
+
+        .theme-toggle {
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .theme-toggle:hover {
+            opacity: 0.9;
+        }
+
+        /* Badge Styles */
         .badge {
             display: inline-block;
-            padding: 0.2rem 0.5rem;
-            border-radius: 5px;
-            font-size: 0.8rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
             font-weight: 600;
-            margin-right: 5px;
-            margin-bottom: 5px;
+            margin-right: 0.5rem;
+            white-space: nowrap;
         }
         
         .badge-country {
@@ -240,19 +324,102 @@ func generateIndexHTML(dirPath string, entries []TSLIndexEntry, title string) er
             color: white;
         }
 
-        .tsl-meta {
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 5px;
-            background-color: var(--card-background-color);
+        /* Responsive Table */
+        .table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 2rem;
+            border-radius: 8px;
             border: 1px solid var(--card-border-color);
+        }
+
+        table {
+            margin-bottom: 0;
+            width: 100%;
         }
 
         table th {
             position: sticky;
             top: 0;
             background-color: var(--card-background-color);
-            z-index: 1;
+            z-index: 10;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        table th:hover {
+            background-color: var(--primary-hover);
+        }
+
+        table th::after {
+            content: ' ⇅';
+            opacity: 0.3;
+            font-size: 0.8em;
+        }
+
+        table th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+
+        table th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+
+        table td {
+            vertical-align: middle;
+        }
+
+        table tbody tr {
+            transition: background-color 0.2s;
+        }
+
+        table tbody tr:hover {
+            background-color: var(--primary-hover);
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stat-card .number {
+                font-size: 1.5rem;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .controls input[type="search"],
+            .controls select {
+                width: 100%;
+            }
+
+            /* Stack table cells on mobile */
+            table {
+                font-size: 0.85rem;
+            }
+
+            table th,
+            table td {
+                padding: 0.5rem;
+            }
+
+            .badge {
+                font-size: 0.7rem;
+                padding: 0.2rem 0.4rem;
+            }
         }
 
         /* Dark mode compatibility */
@@ -260,7 +427,25 @@ func generateIndexHTML(dirPath string, entries []TSLIndexEntry, title string) er
             :root:not([data-theme="light"]) {
                 --badge-qualified-bg: #27ae60;
                 --badge-nonqualified-bg: #f39c12;
+                --badge-info-bg: #3498db;
             }
+        }
+
+        /* Loading/Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--muted-color);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--card-border-color);
+            text-align: center;
+            color: var(--muted-color);
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -268,48 +453,208 @@ func generateIndexHTML(dirPath string, entries []TSLIndexEntry, title string) er
     <main class="container">
         <header>
             <h1>{{ .Title }}</h1>
-            <div class="tsl-meta">
-                <p>
-                    <strong>Total TSLs:</strong> {{ len .Entries }} | 
-                    <strong>Generated:</strong> {{ .GeneratedDate }}
-                </p>
-            </div>
         </header>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Territory</th>
-                    <th>Sequence</th>
-                    <th>Issue Date</th>
-                    <th>Next Update</th>
-                    <th>Services</th>
-                    <th>Type</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{ range .Entries }}
-                <tr>
-                    <td>
-                        <a href="{{ .URL }}">
-                            <span class="badge badge-country">{{ .Territory }}</span>
-                            {{ .Title }}
-                        </a>
-                    </td>
-                    <td>{{ .Sequence }}</td>
-                    <td>{{ .IssueDate }}</td>
-                    <td>{{ .NextUpdate }}</td>
-                    <td>{{ .TrustService }}</td>
-                    <td><code>{{ .SchemeType }}</code></td>
-                </tr>
-                {{ end }}
-            </tbody>
-        </table>
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="number">{{ len .Entries }}</div>
+                <div class="label">Total TSLs</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="total-services">0</div>
+                <div class="label">Trust Services</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="total-territories">{{ len .Entries }}</div>
+                <div class="label">Territories</div>
+            </div>
+            <div class="stat-card">
+                <div class="number">{{ .GeneratedDate }}</div>
+                <div class="label">Last Updated</div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Controls -->
+        <div class="controls">
+            <input type="search" id="search" placeholder="Search by territory, title, or type..." 
+                   aria-label="Search TSLs">
+            <select id="filter-type" aria-label="Filter by type">
+                <option value="">All Types</option>
+            </select>
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+                🌓 Toggle Theme
+            </button>
+        </div>
+
+        <!-- TSL Table -->
+        <div class="table-wrapper">
+            <table id="tsl-table">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)">Territory</th>
+                        <th onclick="sortTable(1)">Sequence</th>
+                        <th onclick="sortTable(2)">Issue Date</th>
+                        <th onclick="sortTable(3)">Next Update</th>
+                        <th onclick="sortTable(4)">Services</th>
+                        <th onclick="sortTable(5)">Type</th>
+                    </tr>
+                </thead>
+                <tbody id="tsl-tbody">
+                    {{ range .Entries }}
+                    <tr data-territory="{{ .Territory }}" data-type="{{ .SchemeType }}">
+                        <td>
+                            <a href="{{ .URL }}">
+                                <span class="badge badge-country">{{ .Territory }}</span>
+                                <span class="tsl-title">{{ .Title }}</span>
+                            </a>
+                        </td>
+                        <td>{{ .Sequence }}</td>
+                        <td>{{ .IssueDate }}</td>
+                        <td>{{ .NextUpdate }}</td>
+                        <td>{{ .TrustService }}</td>
+                        <td><code>{{ .SchemeType }}</code></td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="no-results" class="empty-state" style="display: none;">
+            <p>No TSLs found matching your search criteria.</p>
+        </div>
 
         <footer>
-            <p>Generated by Go-Trust TSL Pipeline • {{ .GeneratedDate }}</p>
+            <p>
+                <strong>Generated by Go-Trust TSL Pipeline</strong><br>
+                {{ .GeneratedDate }} • {{ len .Entries }} Trust Status Lists
+            </p>
         </footer>
     </main>
+
+    <script>
+        // Calculate total services
+        document.addEventListener('DOMContentLoaded', function() {
+            let totalServices = 0;
+            document.querySelectorAll('#tsl-tbody tr').forEach(row => {
+                const services = parseInt(row.cells[4].textContent) || 0;
+                totalServices += services;
+            });
+            document.getElementById('total-services').textContent = totalServices.toLocaleString();
+
+            // Populate type filter
+            const types = new Set();
+            document.querySelectorAll('#tsl-tbody tr').forEach(row => {
+                const type = row.getAttribute('data-type');
+                if (type) types.add(type);
+            });
+            const filterSelect = document.getElementById('filter-type');
+            Array.from(types).sort().forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                filterSelect.appendChild(option);
+            });
+        });
+
+        // Search functionality
+        document.getElementById('search').addEventListener('input', filterTable);
+        document.getElementById('filter-type').addEventListener('change', filterTable);
+
+        function filterTable() {
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            const filterType = document.getElementById('filter-type').value;
+            const rows = document.querySelectorAll('#tsl-tbody tr');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const type = row.getAttribute('data-type');
+                const matchesSearch = text.includes(searchTerm);
+                const matchesType = !filterType || type === filterType;
+
+                if (matchesSearch && matchesType) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            document.getElementById('no-results').style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        // Table sorting
+        let sortColumn = -1;
+        let sortAscending = true;
+
+        function sortTable(columnIndex) {
+            const table = document.getElementById('tsl-table');
+            const tbody = document.getElementById('tsl-tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            // Update sort direction
+            if (sortColumn === columnIndex) {
+                sortAscending = !sortAscending;
+            } else {
+                sortAscending = true;
+                sortColumn = columnIndex;
+            }
+
+            // Remove sort classes from all headers
+            table.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+
+            // Add sort class to current header
+            const header = table.querySelectorAll('th')[columnIndex];
+            header.classList.add(sortAscending ? 'sort-asc' : 'sort-desc');
+
+            // Sort rows
+            rows.sort((a, b) => {
+                let aValue = a.cells[columnIndex].textContent.trim();
+                let bValue = b.cells[columnIndex].textContent.trim();
+
+                // Extract numeric values from badges
+                if (columnIndex === 0) {
+                    aValue = a.getAttribute('data-territory') || aValue;
+                    bValue = b.getAttribute('data-territory') || bValue;
+                }
+
+                // Try to parse as numbers
+                const aNum = parseFloat(aValue.replace(/[^0-9.-]/g, ''));
+                const bNum = parseFloat(bValue.replace(/[^0-9.-]/g, ''));
+
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return sortAscending ? aNum - bNum : bNum - aNum;
+                }
+
+                // String comparison
+                return sortAscending ? 
+                    aValue.localeCompare(bValue) : 
+                    bValue.localeCompare(aValue);
+            });
+
+            // Reorder rows in DOM
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // Load saved theme
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme') || 
+                (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        });
+    </script>
 </body>
 </html>`
 

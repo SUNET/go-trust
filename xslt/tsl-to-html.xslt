@@ -28,7 +28,6 @@
           <xsl:value-of select="tsl:TrustServiceStatusList/tsl:SchemeInformation/tsl:SchemeTerritory"/>
           <xsl:text> - Trust Service Status List</xsl:text>
         </title>
-        <!-- PicoCSS -->
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css"/>
         <style>
           /* Custom styles to complement PicoCSS */
@@ -39,25 +38,113 @@
             --badge-withdrawn-bg: #e74c3c;
           }
           
-          .cert-data {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.8rem;
-            max-height: 150px;
-            overflow-y: auto;
-            padding: 10px;
-            border: 1px solid var(--card-border-color);
-            white-space: pre-wrap;
-            word-break: break-all;
+          body {
+            padding-bottom: 2rem;
           }
 
+          .container {
+            max-width: 1400px;
+          }
+
+          /* Header Improvements */
+          nav {
+            margin-bottom: 1.5rem;
+          }
+
+          nav ul li strong {
+            font-size: 1.2rem;
+          }
+
+          /* Back to Index Button */
+          .back-link {
+            margin-bottom: 1rem;
+          }
+
+          .back-link a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            color: white;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 600;
+          }
+
+          .back-link a:hover {
+            opacity: 0.9;
+          }
+
+          /* Theme Toggle */
+          .theme-toggle {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 0.75rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+          }
+
+          .theme-toggle:hover {
+            opacity: 0.9;
+            transform: scale(1.05);
+          }
+
+          /* TSL Meta Box */
+          .tsl-meta {
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            background-color: var(--card-background-color);
+            border: 1px solid var(--card-border-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          }
+
+          .tsl-meta p {
+            margin-bottom: 0.5rem;
+          }
+
+          .tsl-meta p:last-child {
+            margin-bottom: 0;
+          }
+
+          /* Certificate Data */
+          .cert-data {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.75rem;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 1rem;
+            border: 1px solid var(--card-border-color);
+            border-radius: 5px;
+            background-color: var(--code-background-color);
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.4;
+          }
+
+          /* Badges */
           .badge {
             display: inline-block;
-            padding: 0.2rem 0.5rem;
-            border-radius: 5px;
+            padding: 0.3rem 0.7rem;
+            border-radius: 4px;
             font-size: 0.8rem;
             font-weight: 600;
-            margin-right: 5px;
-            margin-bottom: 5px;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            white-space: nowrap;
           }
           
           .badge-qualified {
@@ -80,22 +167,31 @@
             color: white;
           }
 
+          /* Details/Summary Improvements */
           details {
             margin-bottom: 1rem;
           }
           
           details summary {
             cursor: pointer;
-            padding: 0.5rem;
+            padding: 0.75rem 1rem;
             background-color: var(--card-background-color);
             border: 1px solid var(--card-border-color);
             border-radius: 5px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            user-select: none;
+          }
+
+          details summary:hover {
+            background-color: var(--primary-hover);
           }
           
           details[open] summary {
             border-bottom-left-radius: 0;
             border-bottom-right-radius: 0;
             margin-bottom: 0;
+            background-color: var(--primary-hover);
           }
           
           details .content {
@@ -104,26 +200,86 @@
             border-top: none;
             border-bottom-left-radius: 5px;
             border-bottom-right-radius: 5px;
+            background-color: var(--card-background-color);
           }
-          
+
+          /* Service Cards */
           .service-card {
-            margin-left: 2rem;
+            margin-left: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-left: 1rem;
             border-left: 4px solid var(--primary-focus);
           }
-          
+
+          /* Provider Cards */
           .provider-card {
             border-left: 4px solid var(--primary);
             padding-left: 1rem;
+            margin-bottom: 2rem;
           }
 
+          /* URI Display */
           .uri {
             word-break: break-all;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 0.9em;
+            font-size: 0.85em;
+            line-height: 1.4;
           }
 
+          /* Articles */
           article {
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
+          }
+
+          /* Tables - Responsive */
+          .table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 1rem;
+          }
+
+          table {
+            width: 100%;
+            min-width: auto;
+          }
+
+          table th {
+            white-space: nowrap;
+            background-color: var(--card-background-color);
+            padding: 0.75rem;
+          }
+
+          table td {
+            padding: 0.75rem;
+            vertical-align: top;
+          }
+
+          /* Headings */
+          h2 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary);
+          }
+
+          h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+          }
+
+          h4 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+          }
+
+          /* Footer */
+          footer {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--card-border-color);
+            text-align: center;
+            color: var(--muted-color);
+            font-size: 0.9rem;
           }
           
           /* Dark mode compatibility */
@@ -134,38 +290,161 @@
               --badge-granted-bg: #2ecc71;
               --badge-withdrawn-bg: #e74c3c;
             }
-          }
-          
-          @media (max-width: 768px) {
-            .service-card {
-              margin-left: 0.5rem;
+
+            .cert-data {
+              background-color: #1a1a1a;
             }
           }
 
-          /* Custom header for TSL info */
-          .tsl-meta {
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 5px;
-            background-color: var(--card-background-color);
-            border: 1px solid var(--card-border-color);
+          /* Mobile Responsiveness */
+          @media (max-width: 768px) {
+            .container {
+              padding: 1rem;
+            }
+
+            nav ul li strong {
+              font-size: 1rem;
+            }
+
+            .service-card {
+              margin-left: 0.5rem;
+              padding-left: 0.75rem;
+            }
+
+            .provider-card {
+              padding-left: 0.75rem;
+            }
+
+            table {
+              font-size: 0.85rem;
+            }
+
+            table th,
+            table td {
+              padding: 0.5rem;
+            }
+
+            .badge {
+              font-size: 0.7rem;
+              padding: 0.25rem 0.5rem;
+            }
+
+            .cert-data {
+              font-size: 0.7rem;
+              padding: 0.75rem;
+              max-height: 150px;
+            }
+
+            h2 {
+              font-size: 1.5rem;
+            }
+
+            h3 {
+              font-size: 1.25rem;
+            }
+
+            h4 {
+              font-size: 1.1rem;
+            }
+
+            .theme-toggle {
+              bottom: 1rem;
+              right: 1rem;
+              width: 45px;
+              height: 45px;
+              font-size: 1.25rem;
+            }
+
+            /* Stack table rows vertically on very small screens */
+            @media (max-width: 480px) {
+              table {
+                font-size: 0.8rem;
+              }
+
+              table th {
+                min-width: 100px;
+              }
+            }
+          }
+
+          /* Print Styles */
+          @media print {
+            .theme-toggle,
+            nav,
+            .back-link {
+              display: none;
+            }
+
+            body {
+              background: white;
+            }
+
+            details {
+              page-break-inside: avoid;
+            }
+
+            details summary {
+              display: none;
+            }
+
+            details .content {
+              border: none;
+              padding: 0;
+            }
           }
         </style>
       </head>
       <body>
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">🌓</button>
+        
         <main class="container">
           <xsl:apply-templates select="tsl:TrustServiceStatusList"/>
           
           <footer>
-            <p>Generated using TSL to HTML Stylesheet with PicoCSS</p>
+            <p><strong>Generated using TSL to HTML Stylesheet</strong><br/>
+            Styled with PicoCSS</p>
           </footer>
         </main>
+
+        <script>
+          // Theme toggle functionality
+          function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+          }
+
+          // Load saved theme
+          document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme') || 
+              (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', savedTheme);
+          });
+
+          // Smooth scroll to sections
+          document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+              e.preventDefault();
+              const target = document.querySelector(this.getAttribute('href'));
+              if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            });
+          });
+        </script>
       </body>
     </html>
   </xsl:template>
   
   <!-- Process the Trust Service Status List -->
   <xsl:template match="tsl:TrustServiceStatusList">
+    <!-- Back to Index Link -->
+    <div class="back-link">
+      <a href="index.html">← Back to Index</a>
+    </div>
+
     <header>
       <nav>
         <ul>
@@ -175,7 +454,8 @@
           </strong></li>
         </ul>
         <ul>
-          <li><a href="#tsp-list" role="button">Trust Service Providers</a></li>
+          <li><a href="#scheme-info" role="button">Scheme Info</a></li>
+          <li><a href="#tsp-list" role="button">Service Providers</a></li>
         </ul>
       </nav>
     </header>
@@ -191,9 +471,10 @@
       </p>
     </div>
     
-    <article>
+    <article id="scheme-info">
       <h2>Scheme Information</h2>
-      <table>
+      <div class="table-wrapper">
+        <table>
         <tr>
           <th>Scheme Name</th>
           <td>
@@ -239,6 +520,7 @@
           </td>
         </tr>
       </table>
+      </div>
       
       <details>
         <summary>Policy/Legal Notice</summary>
@@ -253,7 +535,8 @@
       <h3>Pointers to Other TSLs</h3>
       <xsl:choose>
         <xsl:when test="tsl:SchemeInformation/tsl:PointersToOtherTSL/tsl:OtherTSLPointer">
-          <table>
+          <div class="table-wrapper">
+            <table>
             <thead>
               <tr>
                 <th>TSL Type</th>
@@ -277,6 +560,7 @@
               </xsl:for-each>
             </tbody>
           </table>
+          </div>
         </xsl:when>
         <xsl:otherwise>
           <p>No pointers to other TSLs found.</p>
@@ -307,7 +591,8 @@
       </h3>
       
       <h4>Provider Information</h4>
-      <table>
+      <div class="table-wrapper">
+        <table>
         <tr>
           <th>TSP Name</th>
           <td>
@@ -335,6 +620,7 @@
           </td>
         </tr>
       </table>
+      </div>
       
       <details>
         <summary>Contact Details</summary>
@@ -397,7 +683,8 @@
         </xsl:choose>
       </div>
       
-      <table>
+      <div class="table-wrapper">
+        <table>
         <tr>
           <th>Service Type</th>
           <td class="uri"><code><xsl:value-of select="$serviceType"/></code></td>
@@ -411,6 +698,7 @@
           <td><xsl:value-of select="tsl:ServiceInformation/tsl:StatusStartingTime"/></td>
         </tr>
       </table>
+      </div>
       
       <details>
         <summary>Service Digital Identity</summary>
