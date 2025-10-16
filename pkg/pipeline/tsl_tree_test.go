@@ -460,3 +460,34 @@ func TestTraverseNode_EdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestCalculateNodeDepth_EdgeCases(t *testing.T) {
+	t.Run("Nil node returns current depth", func(t *testing.T) {
+		depth := calculateNodeDepth(nil, 5)
+		if depth != 5 {
+			t.Errorf("calculateNodeDepth with nil node should return current depth (5), got %d", depth)
+		}
+	})
+
+	t.Run("Node with no children returns current depth", func(t *testing.T) {
+		node := &TSLNode{
+			TSL:      &etsi119612.TSL{Source: "leaf.xml"},
+			Children: []*TSLNode{},
+		}
+		depth := calculateNodeDepth(node, 2)
+		if depth != 2 {
+			t.Errorf("Leaf node should return current depth (2), got %d", depth)
+		}
+	})
+
+	t.Run("Node with nil children array", func(t *testing.T) {
+		node := &TSLNode{
+			TSL:      &etsi119612.TSL{Source: "leaf.xml"},
+			Children: nil,
+		}
+		depth := calculateNodeDepth(node, 3)
+		if depth != 3 {
+			t.Errorf("Node with nil children should return current depth (3), got %d", depth)
+		}
+	})
+}
