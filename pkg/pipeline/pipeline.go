@@ -58,7 +58,6 @@ func (pl *Pipeline) Process(ctx *Context) (*Context, error) {
 //   - https://example.com/tsl.xml
 //   - transform:
 //   - /path/to/stylesheet.xslt
-//   - replace
 //   - publish:
 //   - /path/to/output
 //

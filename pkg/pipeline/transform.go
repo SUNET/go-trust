@@ -86,13 +86,23 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 		}
 	}
 
-	if ctx.TSLs == nil || ctx.TSLs.IsEmpty() {
+	if ctx.TSLTrees == nil || ctx.TSLTrees.IsEmpty() {
 		return ctx, fmt.Errorf("no TSLs to transform")
 	}
 
+	// Collect all TSLs from all trees
+	var allTSLs []*etsi119612.TSL
+	treeSlice := ctx.TSLTrees.ToSlice()
+	for _, tree := range treeSlice {
+		if tree == nil {
+			continue
+		}
+		allTSLs = append(allTSLs, tree.ToSlice()...)
+	}
+
 	// Setup for transformations
-	transformedTSLs := make([]*etsi119612.TSL, 0, ctx.TSLs.Size())
-	tsls := ctx.TSLs.ToSlice()
+	transformedTSLs := make([]*etsi119612.TSL, 0, len(allTSLs))
+	tsls := allTSLs
 
 	for i, tsl := range tsls {
 		if tsl == nil {
@@ -166,10 +176,14 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 
 	// Replace the TSLs in the context if in replace mode
 	if isReplace {
-		ctx.TSLs = nil
-		ctx.TSLs = ctx.EnsureTSLStack().TSLs
+		// Clear the existing tree stack
+		ctx.TSLTrees = nil
+		ctx.EnsureTSLTrees()
+
+		// Add each transformed TSL as a new tree
 		for _, transformedTSL := range transformedTSLs {
-			ctx.TSLs.Push(transformedTSL)
+			tree := NewTSLTree(transformedTSL)
+			ctx.AddTSLTree(tree)
 		}
 	}
 

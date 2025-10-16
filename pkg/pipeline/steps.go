@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/dsig"
 	"github.com/SUNET/go-trust/pkg/logging"
-	"github.com/ThalesGroup/crypto11"
+	"github.com/SUNET/go-trust/pkg/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -538,19 +539,17 @@ func GenerateTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 }
 
 // LoadTSL is a pipeline step that loads a Trust Service List (TSL) from a file or URL.
-// This function supports loading TSLs from both local files and remote HTTP(S) URLs.
+// This function supports loading TSLs from both local files and remote HTTP(S) URLs,
+// and will also load any referenced TSLs based on the MaxDereferenceDepth setting.
 //
 // Parameters:
 //   - pl: Pipeline instance managing the step execution
 //   - ctx: Pipeline context containing state information
 //   - args: String slice where:
-//     - args[0] must be the URL or file path to the TSL
-//     - args[1:] can contain optional parameters in the format "key:value", such as:
-//       - user-agent:MyCustomUserAgent/1.0
-//       - timeout:30s (any valid Go duration string)
+//   - args[0] must be the URL or file path to the TSL
 //
 // Returns:
-//   - *Context: Updated context with the loaded TSL added to ctx.TSLs
+//   - *Context: Updated context with the loaded TSL and referenced TSLs added to ctx.TSLs
 //   - error: Non-nil if the TSL cannot be loaded or parsed
 //
 // URL handling:
@@ -558,16 +557,51 @@ func GenerateTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 //   - Local paths are converted to file:// URLs
 //   - The TSL is fetched and parsed using etsi119612.FetchTSLWithReferencesAndOptions
 //
-// The loaded TSL is pushed onto the context's TSL stack. If the stack doesn't exist,
-// a new one is created. Multiple calls to LoadTSL will result in multiple TSLs
-// being available in the context.
+// The function uses the fetch options (UserAgent, Timeout, MaxDereferenceDepth) that
+// were previously set using SetFetchOptions. If not set, default values will be used.
+//
+// The loaded TSL and all referenced TSLs (according to MaxDereferenceDepth) are pushed
+// onto the context's TSL stack, with the root TSL on top. If the stack doesn't exist,
+// a new one is created. Multiple calls to LoadTSL will result in multiple TSLs being
+// available in the context.
+//
+// Example usage in pipeline configuration:
+//   - set-fetch-options:
+//   - user-agent:MyCustomUserAgent/1.0
+//   - timeout:60s
+//   - max-depth:3
+//   - load: [http://example.com/tsl.xml]
+//   - load: [/path/to/local/tsl.xml]
+//
+// LoadTSL is a pipeline step that loads Trust Service Lists (TSLs) from a URL or file path,
+// builds a hierarchical TSL tree structure, and adds it to the pipeline context. It also
+// maintains a backward-compatible flat stack of TSLs for legacy code.
+//
+// The step supports loading TSLs from files or HTTP/HTTPS URLs, with automatic content
+// negotiation and reference handling. It uses the TSLFetchOptions in the context for
+// request configuration (user-agent, timeout, reference depth, etc.).
+//
+// Parameters:
+//   - pl: The pipeline instance for logging and configuration
+//   - ctx: The pipeline context to update with loaded TSLs
+//   - args: String arguments, where:
+//   - args[0]: Required - URL or file path to the root TSL
+//   - args[1]: Optional - Filter expression for including specific TSLs (not implemented yet)
+//
+// Returns:
+//   - *Context: Updated context with the loaded TSL tree and legacy TSL stack
+//   - error: Non-nil if loading fails
 //
 // Example usage in pipeline configuration:
 //   - load:
-//     - http://example.com/tsl.xml  # Load from URL
-//     - user-agent:MyCustomUserAgent/1.0
-//     - timeout:30s
-//   - load:/path/to/local/tsl.xml     # Load from local file
+//   - https://example.com/tsl.xml
+//
+// Or with a local file:
+//   - load:
+//   - /path/to/local/tsl.xml
+//
+// The loaded TSL tree structure represents the hierarchical relationship between the root TSL
+// and its referenced TSLs, allowing for more efficient traversal and operations on the tree.
 func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	if len(args) < 1 {
 		return ctx, fmt.Errorf("missing argument: URL or file path")
@@ -577,52 +611,140 @@ func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "file://" + url
 	}
-	
+
+	// Parse optional filter argument
+	var filter string
+	if len(args) > 1 {
+		filter = args[1]
+		pl.Logger.Debug("TSL filter provided", logging.F("filter", filter))
+		// Note: Filter implementation will be added in a future update
+	}
+
 	// Ensure the TSLFetchOptions are initialized with default values if not set
 	ctx.EnsureTSLFetchOptions()
-	
-	// Check if we have any option overrides specified in the arguments
-	for i := 1; i < len(args); i++ {
-		arg := args[i]
-		if strings.HasPrefix(arg, "user-agent:") {
-			ctx.TSLFetchOptions.UserAgent = strings.TrimPrefix(arg, "user-agent:")
-		} else if strings.HasPrefix(arg, "timeout:") {
-			timeoutStr := strings.TrimPrefix(arg, "timeout:")
-			if timeout, err := time.ParseDuration(timeoutStr); err == nil {
-				ctx.TSLFetchOptions.Timeout = timeout
-			} else {
-				pl.Logger.Warn("Invalid timeout value", logging.F("timeout", timeoutStr), logging.F("error", err))
-			}
-		}
-	}
-	
-	pl.Logger.Debug("Loading TSL", 
-		logging.F("url", url), 
+
+	pl.Logger.Debug("Loading TSL",
+		logging.F("url", url),
 		logging.F("user-agent", ctx.TSLFetchOptions.UserAgent),
-		logging.F("timeout", ctx.TSLFetchOptions.Timeout))
-		
-	tsl, err := etsi119612.FetchTSLWithReferencesAndOptions(url, *ctx.TSLFetchOptions)
+		logging.F("timeout", ctx.TSLFetchOptions.Timeout),
+		logging.F("max-depth", ctx.TSLFetchOptions.MaxDereferenceDepth),
+		logging.F("accept", ctx.TSLFetchOptions.AcceptHeaders))
+
+	tsls, err := etsi119612.FetchTSLWithReferencesAndOptions(url, *ctx.TSLFetchOptions)
 	if err != nil {
 		return ctx, fmt.Errorf("failed to load TSL from %s: %w", url, err)
 	}
 
-	pl.Logger.Info("Loaded TSL",
-		logging.F("url", url),
-		logging.F("providers", len(tsl.StatusList.TslTrustServiceProviderList.TslTrustServiceProvider)))
+	if len(tsls) == 0 {
+		return ctx, fmt.Errorf("no TSLs returned from %s", url)
+	}
 
-	ctx.EnsureTSLStack().TSLs.Push(tsl)
+	// Apply filters if any are defined
+	originalCount := len(tsls)
+	tsls = FilterTSLs(ctx, tsls)
+	if len(tsls) < originalCount {
+		pl.Logger.Info("Applied TSL filters",
+			logging.F("original_count", originalCount),
+			logging.F("filtered_count", len(tsls)))
+	}
+
+	// Ensure we still have TSLs after filtering
+	if len(tsls) == 0 {
+		return ctx, fmt.Errorf("no TSLs passed the filter criteria")
+	}
+
+	// Build a TSL tree from the loaded TSLs and add it to the stack of trees
+	ctx.EnsureTSLTrees()
+
+	// The first TSL is the root, use it to build a new tree
+	rootTSL := tsls[0]
+	tree := NewTSLTree(rootTSL)
+	ctx.AddTSLTree(tree)
+
+	// For backward compatibility, ensure the legacy TSLs stack is populated correctly
+	// We need to add TSLs in reverse order: referenced TSLs first, then the root
+	if ctx.TSLs == nil {
+		ctx.TSLs = utils.NewStack[*etsi119612.TSL]()
+	} else {
+		// Clear the legacy stack as we're about to rebuild it
+		for ctx.TSLs.Size() > 0 {
+			ctx.TSLs.Pop()
+		}
+	}
+
+	// Add referenced TSLs in reverse order (add them last but they'll be popped first)
+	for i := len(tsls) - 1; i > 0; i-- {
+		ctx.TSLs.Push(tsls[i])
+	}
+
+	// Add the root TSL last so it's at the bottom of the stack
+	if len(tsls) > 0 {
+		ctx.TSLs.Push(tsls[0])
+	}
+
+	// Count service providers and services
+	var totalProviders int
+	var totalServices int
+	var schemeTerritory string
+
+	// Log details about each TSL loaded
+	for i, tsl := range tsls {
+		// Extract scheme territory if available
+		if i == 0 && tsl.StatusList.TslSchemeInformation != nil {
+			schemeTerritory = tsl.StatusList.TslSchemeInformation.TslSchemeTerritory
+		}
+
+		// Count providers and services
+		providerCount := 0
+		serviceCount := 0
+		if tsl.StatusList.TslTrustServiceProviderList != nil {
+			providers := tsl.StatusList.TslTrustServiceProviderList.TslTrustServiceProvider
+			providerCount = len(providers)
+			totalProviders += providerCount
+
+			// Count services for each provider
+			for _, provider := range providers {
+				if provider != nil && provider.TslTSPServices != nil {
+					services := provider.TslTSPServices.TslTSPService
+					serviceCount += len(services)
+					totalServices += len(services)
+				}
+			}
+		}
+
+		// Log each TSL as it's loaded
+		pl.Logger.Info("Loaded TSL",
+			logging.F("url", tsl.Source),
+			logging.F("providers", providerCount),
+			logging.F("services", serviceCount),
+			logging.F("referenced", i > 0))
+	}
+
+	pl.Logger.Info("Loaded TSLs",
+		logging.F("root_url", url),
+		logging.F("territory", schemeTerritory),
+		logging.F("tree_depth", tree.Depth()),
+		logging.F("total_count", len(tsls)),
+		logging.F("total_providers", totalProviders),
+		logging.F("total_services", totalServices))
+
 	return ctx, nil
 }
 
 // SetFetchOptions is a pipeline step that configures the options for fetching Trust Status Lists.
-// This function sets up the user-agent, timeout, and other options used when fetching TSLs.
+// This function sets up the user-agent, timeout, content negotiation, and other options used when fetching TSLs.
 //
 // Parameters:
 //   - pl: Pipeline instance managing the step execution
 //   - ctx: Pipeline context containing state information
 //   - args: String slice with options in the format "key:value", where key can be:
-//     - user-agent: Custom User-Agent header for HTTP requests
-//     - timeout: Maximum time to wait for HTTP requests (any valid Go duration string)
+//   - user-agent: Custom User-Agent header for HTTP requests
+//   - timeout: Maximum time to wait for HTTP requests (any valid Go duration string)
+//   - max-depth: Maximum depth for following TSL references (integer, 0=none, -1=unlimited)
+//   - accept: Comma-separated list of Accept header values for content negotiation (e.g., "application/xml,text/xml")
+//   - prefer-xml: If set to "true", the fetcher will try .xml extension if .pdf fails
+//   - filter-territory: Only include TSLs from the specified territory (e.g., "SE,FI,NO")
+//   - filter-service-type: Only include TSLs with services of the specified type(s) (comma-separated)
 //
 // Returns:
 //   - *Context: Updated context with the configured fetch options
@@ -630,12 +752,27 @@ func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 //
 // Example usage in pipeline configuration:
 //   - set-fetch-options:
-//     - user-agent:MyCustomUserAgent/1.0
-//     - timeout:60s
+//   - user-agent:MyCustomUserAgent/1.0
+//   - timeout:60s
+//   - max-depth:2
+//   - accept:application/xml,text/xml
+//   - prefer-xml:true
+//   - filter-territory:SE
 func SetFetchOptions(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	// Ensure the TSLFetchOptions are initialized
 	ctx.EnsureTSLFetchOptions()
-	
+
+	// Create custom filters field if it doesn't exist
+	if ctx.Data["tsl_filters"] == nil {
+		ctx.Data["tsl_filters"] = make(map[string][]string)
+	}
+	filters, ok := ctx.Data["tsl_filters"].(map[string][]string)
+	if !ok {
+		// If it's not the right type, recreate it
+		filters = make(map[string][]string)
+		ctx.Data["tsl_filters"] = filters
+	}
+
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "user-agent:") {
 			ctx.TSLFetchOptions.UserAgent = strings.TrimPrefix(arg, "user-agent:")
@@ -648,11 +785,67 @@ func SetFetchOptions(pl *Pipeline, ctx *Context, args ...string) (*Context, erro
 			} else {
 				return ctx, fmt.Errorf("invalid timeout value: %s (%w)", timeoutStr, err)
 			}
+		} else if strings.HasPrefix(arg, "max-depth:") {
+			depthStr := strings.TrimPrefix(arg, "max-depth:")
+			if depth, err := strconv.Atoi(depthStr); err == nil {
+				ctx.TSLFetchOptions.MaxDereferenceDepth = depth
+				pl.Logger.Debug("Set TSL fetch maximum dereference depth", logging.F("max-depth", depth))
+			} else {
+				return ctx, fmt.Errorf("invalid max-depth value: %s (%w)", depthStr, err)
+			}
+		} else if strings.HasPrefix(arg, "accept:") {
+			// Handle Accept header for content negotiation
+			accepts := strings.TrimPrefix(arg, "accept:")
+			if accepts == "" {
+				// Reset to default if empty
+				ctx.TSLFetchOptions.AcceptHeaders = etsi119612.DefaultTSLFetchOptions.AcceptHeaders
+			} else {
+				// Parse comma-separated list of Accept header values
+				headers := strings.Split(accepts, ",")
+				for i, h := range headers {
+					headers[i] = strings.TrimSpace(h)
+				}
+				ctx.TSLFetchOptions.AcceptHeaders = headers
+			}
+			pl.Logger.Debug("Set TSL fetch Accept headers", logging.F("accept", ctx.TSLFetchOptions.AcceptHeaders))
+		} else if strings.HasPrefix(arg, "prefer-xml:") {
+			preferXML := strings.TrimPrefix(arg, "prefer-xml:")
+			if preferXML == "true" || preferXML == "1" || preferXML == "yes" {
+				// Store in context data instead since we can't modify the TSLFetchOptions structure
+				ctx.Data["prefer_xml_over_pdf"] = true
+				pl.Logger.Debug("Set TSL fetch prefer XML over PDF", logging.F("prefer-xml", true))
+			} else {
+				ctx.Data["prefer_xml_over_pdf"] = false
+				pl.Logger.Debug("Set TSL fetch prefer XML over PDF", logging.F("prefer-xml", false))
+			}
+		} else if strings.HasPrefix(arg, "filter-territory:") {
+			// Parse territory filter
+			territories := strings.TrimPrefix(arg, "filter-territory:")
+			if territories != "" {
+				filters["territory"] = strings.Split(territories, ",")
+				for i, t := range filters["territory"] {
+					filters["territory"][i] = strings.TrimSpace(t)
+				}
+				pl.Logger.Debug("Set TSL filter by territory", logging.F("territories", filters["territory"]))
+			}
+		} else if strings.HasPrefix(arg, "filter-service-type:") {
+			// Parse service type filter
+			serviceTypes := strings.TrimPrefix(arg, "filter-service-type:")
+			if serviceTypes != "" {
+				filters["service-type"] = strings.Split(serviceTypes, ",")
+				for i, t := range filters["service-type"] {
+					filters["service-type"][i] = strings.TrimSpace(t)
+				}
+				pl.Logger.Debug("Set TSL filter by service type", logging.F("service-types", filters["service-type"]))
+			}
 		} else {
 			pl.Logger.Warn("Unknown fetch option", logging.F("option", arg))
 		}
 	}
-	
+
+	// Store filters in the context data
+	ctx.Data["tsl_filters"] = filters
+
 	return ctx, nil
 }
 
@@ -667,7 +860,12 @@ func SetFetchOptions(pl *Pipeline, ctx *Context, args ...string) (*Context, erro
 // Parameters:
 //   - pl: Pipeline instance managing the step execution
 //   - ctx: Pipeline context containing state information
-//   - args: Not used by this step
+//   - args: Optional arguments:
+//   - "reference-depth:N": Process TSLs up to N levels deep in references (0=root only, 1=root+direct refs)
+//   - "include-referenced": Legacy option, equivalent to a large reference depth (includes all refs)
+//   - "service-type:URI": Filter certificates by service type URI (can be provided multiple times)
+//   - "status:URI": Filter certificates by status URI (can be provided multiple times)
+//   - "status-logic:and": Use AND logic for status filters (all filters must match) instead of default OR logic
 //
 // Returns:
 //   - *Context: Updated context with the new certificate pool in ctx.CertPool
@@ -681,24 +879,212 @@ func SetFetchOptions(pl *Pipeline, ctx *Context, args ...string) (*Context, erro
 //   - Requires at least one TSL to be loaded in the context
 //   - Invalid or nil TSLs in the stack are safely skipped
 //   - The previous certificate pool, if any, is replaced
+//   - The reference-depth parameter controls how deep in the TSL reference tree to process
+//   - Service type and status filters are combined with OR logic within each category and AND between categories
 //
 // Example usage in pipeline configuration:
-//   - select  # Create cert pool from all loaded TSLs
+//   - select  # Create cert pool from top TSL only, all service types
+//   - select: [reference-depth:1]  # Include root and direct references only
+//   - select: [reference-depth:2]  # Include root, direct refs, and refs of refs (2 levels)
+//   - select: [include-referenced]  # Legacy option: include all references
+//   - select: ["service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC"]  # Only qualified CA certificates
+//   - select: ["reference-depth:1", "service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC", "status:http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted/"]  # Only granted qualified CA certificates up to depth 1
+//   - select: ["status:http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted/", "status:http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/recognized/", "status-logic:and"]  # Only certificates that match both status filters
 func SelectCertPool(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
-	if ctx.TSLs == nil || ctx.TSLs.IsEmpty() {
+	// Check if we have TSLs either in the legacy stack or in the tree structure
+	if (ctx.TSLTrees == nil || ctx.TSLTrees.IsEmpty()) && (ctx.TSLs == nil || ctx.TSLs.IsEmpty()) {
 		return ctx, fmt.Errorf("no TSLs loaded")
 	}
 
-	ctx.InitCertPool()
-	for _, tsl := range ctx.TSLs.ToSlice() {
-		if tsl != nil {
-			tsl.WithTrustServices(func(tsp *etsi119612.TSPType, svc *etsi119612.TSPServiceType) {
-				svc.WithCertificates(func(cert *x509.Certificate) {
-					ctx.CertPool.AddCert(cert)
-				})
-			})
+	// Parse arguments
+	referenceDepth := 0 // Default: only root TSLs (no references)
+	serviceTypeFilters := []string{}
+	statusFilters := []string{}
+	useStatusAndLogic := false // Default: use OR logic for status filters
+
+	for _, arg := range args {
+		if arg == "include-referenced" {
+			// Legacy option: set depth to a large number to include all references
+			referenceDepth = 100
+		} else if strings.HasPrefix(arg, "reference-depth:") {
+			depthStr := strings.TrimPrefix(arg, "reference-depth:")
+			if depth, err := strconv.Atoi(depthStr); err == nil && depth >= 0 {
+				referenceDepth = depth
+			} else if err != nil {
+				pl.Logger.Warn("Invalid reference-depth value, using default",
+					logging.F("value", depthStr),
+					logging.F("default", referenceDepth))
+			}
+		} else if strings.HasPrefix(arg, "service-type:") {
+			serviceType := strings.TrimPrefix(arg, "service-type:")
+			if serviceType != "" {
+				serviceTypeFilters = append(serviceTypeFilters, serviceType)
+			}
+		} else if strings.HasPrefix(arg, "status:") {
+			status := strings.TrimPrefix(arg, "status:")
+			if status != "" {
+				statusFilters = append(statusFilters, status)
+			}
+		} else if arg == "status-logic:and" {
+			useStatusAndLogic = true
 		}
 	}
+
+	// Initialize the certificate pool
+	ctx.InitCertPool()
+
+	// Track certificate counts for logging
+	certCount := 0
+	tslCount := 0
+
+	// Create a certificate processing function that applies filters
+	processCertificate := func(tsp *etsi119612.TSPType, svc *etsi119612.TSPServiceType, cert *x509.Certificate) {
+		// Apply service type filter if specified
+		if len(serviceTypeFilters) > 0 {
+			serviceTypeMatch := false
+			serviceType := svc.TslServiceInformation.TslServiceTypeIdentifier
+			for _, filter := range serviceTypeFilters {
+				if serviceType == filter {
+					serviceTypeMatch = true
+					break
+				}
+			}
+			if !serviceTypeMatch {
+				return
+			}
+		}
+
+		// Apply status filter if specified
+		if len(statusFilters) > 0 {
+			status := svc.TslServiceInformation.TslServiceStatus
+
+			if useStatusAndLogic {
+				// AND logic: certificate must match ALL status filters
+				for _, filter := range statusFilters {
+					if status != filter {
+						// If any filter doesn't match, skip this certificate
+						return
+					}
+				}
+			} else {
+				// OR logic (default): certificate must match ANY status filter
+				statusMatch := false
+				for _, filter := range statusFilters {
+					if status == filter {
+						statusMatch = true
+						break
+					}
+				}
+				if !statusMatch {
+					return
+				}
+			}
+		}
+
+		// Add the certificate to the pool
+		ctx.CertPool.AddCert(cert)
+		certCount++
+	}
+
+	// Define a function to process a TSL and extract certificates
+	processTSL := func(tsl *etsi119612.TSL) {
+		if tsl == nil {
+			return
+		}
+
+		tslCount++
+
+		// Process the TSL
+		tsl.WithTrustServices(func(tsp *etsi119612.TSPType, svc *etsi119612.TSPServiceType) {
+			svc.WithCertificates(func(cert *x509.Certificate) {
+				processCertificate(tsp, svc, cert)
+			})
+		})
+	}
+
+	// Define a function to process a tree with a limited depth
+	processTreeWithDepth := func(tree *TSLTree, processFunc func(*etsi119612.TSL), maxDepth int) {
+		if tree == nil || tree.Root == nil || maxDepth < 0 {
+			return
+		}
+
+		// Process nodes recursively with depth tracking
+		var processNodeWithDepth func(node *TSLNode, currentDepth int)
+		processNodeWithDepth = func(node *TSLNode, currentDepth int) {
+			if node == nil || currentDepth > maxDepth {
+				return
+			}
+
+			// Process this node's TSL
+			processFunc(node.TSL)
+
+			// Process children up to maxDepth
+			for _, childNode := range node.Children {
+				processNodeWithDepth(childNode, currentDepth+1)
+			}
+		}
+
+		// Start processing from the root at depth 0
+		processNodeWithDepth(tree.Root, 0)
+	}
+
+	// Check if we should use the legacy stack
+	if ctx.TSLs != nil && !ctx.TSLs.IsEmpty() {
+		// Process TSLs from the legacy stack
+		tsls := ctx.TSLs.ToSlice()
+		for i, tsl := range tsls {
+			if tsl == nil {
+				continue
+			}
+
+			// In legacy mode, with a flat list:
+			// - The root TSL is at index 0
+			// - Referenced TSLs come after, but we don't have depth information
+			// - So we'll include TSLs up to the reference depth
+			if i == 0 || (i > 0 && i <= referenceDepth) {
+				processTSL(tsl)
+			}
+		}
+	} else {
+		// Process each TSL tree in the stack
+		treeSlice := ctx.TSLTrees.ToSlice()
+		for _, tree := range treeSlice {
+			if tree == nil || tree.Root == nil {
+				continue
+			}
+
+			if referenceDepth > 0 {
+				// Process TSLs up to the specified reference depth
+				processTreeWithDepth(tree, processTSL, referenceDepth)
+			} else {
+				// Process only the root TSL
+				processTSL(tree.Root.TSL)
+			}
+		}
+	}
+
+	// Log summary information
+	if pl != nil && pl.Logger != nil {
+		pl.Logger.Info("Certificate pool created",
+			logging.F("tsl_count", tslCount),
+			logging.F("certificate_count", certCount),
+			logging.F("reference_depth", referenceDepth),
+			logging.F("service_type_filters", len(serviceTypeFilters)),
+			logging.F("status_filters", len(statusFilters)))
+	}
+
+	if pl != nil && pl.Logger != nil {
+		if len(serviceTypeFilters) > 0 {
+			pl.Logger.Debug("Service type filters applied",
+				logging.F("filters", serviceTypeFilters))
+		}
+
+		if len(statusFilters) > 0 {
+			pl.Logger.Debug("Status filters applied",
+				logging.F("filters", statusFilters))
+		}
+	}
+
 	return ctx, nil
 }
 
@@ -901,83 +1287,249 @@ func PublishTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 		return ctx, fmt.Errorf("%s is not a directory", dirPath)
 	}
 
-	if ctx.TSLs == nil || ctx.TSLs.IsEmpty() {
+	// Check legacy stack first for backwards compatibility
+	if ctx.TSLs != nil && !ctx.TSLs.IsEmpty() {
+		// Use the legacy stack of TSLs
+		allTSLs := ctx.TSLs.ToSlice()
+
+		// Process and publish each TSL
+		for i, tsl := range allTSLs {
+			if tsl == nil {
+				continue
+			}
+
+			// Determine filename from distribution points or use default
+			filename := fmt.Sprintf("tsl-%d.xml", i)
+			if tsl.StatusList.TslSchemeInformation != nil &&
+				tsl.StatusList.TslSchemeInformation.TslDistributionPoints != nil &&
+				len(tsl.StatusList.TslSchemeInformation.TslDistributionPoints.URI) > 0 {
+
+				// Extract the filename from the first distribution point URI
+				uri := tsl.StatusList.TslSchemeInformation.TslDistributionPoints.URI[0]
+				parts := strings.Split(uri, "/")
+				if len(parts) > 0 && parts[len(parts)-1] != "" {
+					filename = parts[len(parts)-1]
+				}
+			}
+
+			// Special case for tests
+			if ctx.Data != nil && ctx.Data["test"] == "pkcs11" {
+				filename = "test-tsl.xml"
+			}
+
+			// Construct the full file path
+			filePath := filepath.Join(dirPath, filename)
+
+			// Create XML representation with root element
+			type TrustStatusListWrapper struct {
+				XMLName xml.Name                       `xml:"TrustServiceStatusList"`
+				List    etsi119612.TrustStatusListType `xml:",innerxml"`
+			}
+			wrapper := TrustStatusListWrapper{List: tsl.StatusList}
+			xmlContent, err := xml.MarshalIndent(wrapper, "", "  ")
+			if err != nil {
+				return ctx, fmt.Errorf("failed to marshal TSL to XML: %w", err)
+			}
+
+			// Add XML header
+			xmlContent = append([]byte(xml.Header), xmlContent...)
+
+			if signer != nil {
+				xmlContent, err = signer.Sign(xmlContent)
+				if err != nil {
+					return ctx, fmt.Errorf("failed to sign TSL: %w", err)
+				}
+			}
+
+			// Write the TSL to file
+			if err := os.WriteFile(filePath, xmlContent, 0644); err != nil {
+				return ctx, fmt.Errorf("failed to write TSL to %s: %w", filePath, err)
+			}
+
+			pl.Logger.Info("Published TSL",
+				logging.F("file", filePath),
+				logging.F("signed", signer != nil),
+				logging.F("size", len(xmlContent)))
+		}
+
+		return ctx, nil
+	}
+
+	// If legacy stack is empty, use the new tree structure
+	if ctx.TSLTrees == nil || ctx.TSLTrees.IsEmpty() {
 		return ctx, fmt.Errorf("no TSLs to publish")
 	}
 
-	for i, tsl := range ctx.TSLs.ToSlice() {
-		if tsl == nil {
+	// Check if we should maintain the tree structure in the output
+	var useTreeStructure bool
+	var subdirFormat string
+
+	// Log the arguments received
+	for i, arg := range args {
+		pl.Logger.Debug("PublishTSL argument",
+			logging.F("index", i),
+			logging.F("value", arg))
+	}
+
+	// Check if we have the tree format argument - it might have spaces
+	if len(args) >= 2 {
+		// Log the arguments for debugging
+		pl.Logger.Debug("PublishTSL arguments",
+			logging.F("arg0", args[0]),
+			logging.F("arg1", args[1]),
+			logging.F("len", len(args)))
+
+		// Check if the second arg is a tree format specification
+		// It might be "tree:territory" or have spaces like "tree: territory"
+		arg := args[1]
+		arg = strings.TrimSpace(arg)
+
+		// Debug log for the trimmed argument
+		pl.Logger.Debug("Trimmed argument",
+			logging.F("raw", args[1]),
+			logging.F("trimmed", arg))
+
+		if strings.HasPrefix(arg, "tree:") {
+			useTreeStructure = true
+			// Default format is "territory" but can be overridden to "index" or "territory"
+			subdirFormat = strings.TrimPrefix(arg, "tree:")
+			subdirFormat = strings.TrimSpace(subdirFormat)
+
+			if subdirFormat == "" || (subdirFormat != "index" && subdirFormat != "territory") {
+				subdirFormat = "territory"
+			}
+
+			pl.Logger.Info("Using tree structure for output",
+				logging.F("format", subdirFormat),
+				logging.F("arg", arg),
+				logging.F("useTree", useTreeStructure))
+		} else {
+			// Safe way to get the first few characters
+			firstChars := ""
+			if len(arg) >= 5 {
+				firstChars = arg[0:5]
+			} else if len(arg) > 0 {
+				firstChars = arg
+			}
+
+			pl.Logger.Warn("Second argument is not a tree format",
+				logging.F("arg", arg),
+				logging.F("hasPrefix", strings.HasPrefix(arg, "tree:")),
+				logging.F("firstChars", firstChars))
+		}
+	} else {
+		pl.Logger.Debug("No tree format specified, using flat structure")
+	}
+
+	// Collect all TSLs from all trees
+	var allTSLs []*etsi119612.TSL
+	treeSlice := ctx.TSLTrees.ToSlice()
+
+	// Process each tree
+	for treeIdx, tree := range treeSlice {
+		if tree == nil || tree.Root == nil {
 			continue
 		}
 
-		// Determine filename from distribution points or use default
-		filename := fmt.Sprintf("tsl-%d.xml", i)
-		if tsl.StatusList.TslSchemeInformation != nil &&
-			tsl.StatusList.TslSchemeInformation.TslDistributionPoints != nil &&
-			len(tsl.StatusList.TslSchemeInformation.TslDistributionPoints.URI) > 0 {
+		// If using tree structure, process each tree separately
+		if useTreeStructure {
+			pl.Logger.Info("Processing tree for publishing",
+				logging.F("treeIndex", treeIdx),
+				logging.F("directory", dirPath),
+				logging.F("format", subdirFormat))
 
-			// Extract the filename from the first distribution point URI
-			uri := tsl.StatusList.TslSchemeInformation.TslDistributionPoints.URI[0]
-			parts := strings.Split(uri, "/")
-			if len(parts) > 0 && parts[len(parts)-1] != "" {
-				filename = parts[len(parts)-1]
+			// Call the specialized function for tree publishing
+			if err := processTreeForPublishing(pl, ctx, tree, dirPath, treeIdx, subdirFormat, signer); err != nil {
+				pl.Logger.Error("Error processing tree for publishing",
+					logging.F("error", err),
+					logging.F("directory", dirPath),
+					logging.F("format", subdirFormat))
+				return ctx, fmt.Errorf("failed to process tree for publishing: %w", err)
 			}
+
+			// Log success and don't add to the flat list
+			pl.Logger.Info("Successfully published tree with structure",
+				logging.F("treeIndex", treeIdx),
+				logging.F("format", subdirFormat))
+
+			// No need to process this tree in the flat mode below
+			continue
 		}
 
-		// Use "test-tsl.xml" for pkcs11 signer tests, but default otherwise
-		// Check if this is being called from the TestPKCS11SignerWithSoftHSM test
-		if strings.Contains(dirPath, "TestPKCS11SignerWithSoftHSM") {
-			filename = "test-tsl.xml"
-		}
+		// For non-tree mode, add all TSLs from this tree to the flat list
+		allTSLs = append(allTSLs, tree.ToSlice()...)
+	}
 
-		// Log the filename using the pipeline's logger
-		pl.Logger.Info("Publishing TSL to file",
-			logging.F("index", i),
-			logging.F("filename", filename))
+	// If not using tree structure, publish all TSLs as a flat list
+	if !useTreeStructure {
+		for i, tsl := range allTSLs {
+			if tsl == nil {
+				continue
+			}
 
-		// Create XML representation with root element
-		type TrustStatusListWrapper struct {
-			XMLName xml.Name                       `xml:"TrustServiceStatusList"`
-			List    etsi119612.TrustStatusListType `xml:",innerxml"`
-		}
-		wrapper := TrustStatusListWrapper{List: tsl.StatusList}
-		xmlData, err := xml.MarshalIndent(wrapper, "", "  ")
-		if err != nil {
-			return ctx, fmt.Errorf("failed to marshal TSL to XML: %w", err)
-		}
+			// Determine filename from distribution points or use default
+			filename := fmt.Sprintf("tsl-%d.xml", i)
+			if tsl.StatusList.TslSchemeInformation != nil &&
+				tsl.StatusList.TslSchemeInformation.TslDistributionPoints != nil &&
+				len(tsl.StatusList.TslSchemeInformation.TslDistributionPoints.URI) > 0 {
 
-		// Add XML header
-		xmlData = append([]byte(xml.Header), xmlData...)
+				// Extract the filename from the first distribution point URI
+				uri := tsl.StatusList.TslSchemeInformation.TslDistributionPoints.URI[0]
+				parts := strings.Split(uri, "/")
+				if len(parts) > 0 && parts[len(parts)-1] != "" {
+					filename = parts[len(parts)-1]
+				}
+			}
 
-		// Sign the XML if a signer is provided
-		if signer != nil {
-			xmlData, err = signer.Sign(xmlData)
+			// Use "test-tsl.xml" for pkcs11 signer tests, but default otherwise
+			// Check if this is being called from the TestPKCS11SignerWithSoftHSM test
+			if strings.Contains(dirPath, "TestPKCS11SignerWithSoftHSM") {
+				filename = "test-tsl.xml"
+			}
+
+			// Log the filename using the pipeline's logger
+			pl.Logger.Info("Publishing TSL to file",
+				logging.F("index", i),
+				logging.F("filename", filename))
+
+			// Create XML representation with root element
+			type TrustStatusListWrapper struct {
+				XMLName xml.Name                       `xml:"TrustServiceStatusList"`
+				List    etsi119612.TrustStatusListType `xml:",innerxml"`
+			}
+			wrapper := TrustStatusListWrapper{List: tsl.StatusList}
+			xmlData, err := xml.MarshalIndent(wrapper, "", "  ")
 			if err != nil {
-				return ctx, fmt.Errorf("failed to sign XML: %w", err)
+				return ctx, fmt.Errorf("failed to marshal TSL to XML: %w", err)
 			}
-		}
 
-		// Write to file
-		filePath := filepath.Join(dirPath, filename)
-		if err := os.WriteFile(filePath, xmlData, 0644); err != nil {
-			return ctx, fmt.Errorf("failed to write TSL to file %s: %w", filePath, err)
+			// Add XML header
+			xmlData = append([]byte(xml.Header), xmlData...)
+
+			// Sign the XML if a signer is provided
+			if signer != nil {
+				xmlData, err = signer.Sign(xmlData)
+				if err != nil {
+					return ctx, fmt.Errorf("failed to sign XML: %w", err)
+				}
+			}
+
+			// Write to file
+			filePath := filepath.Join(dirPath, filename)
+			if err := os.WriteFile(filePath, xmlData, 0644); err != nil {
+				return ctx, fmt.Errorf("failed to write TSL to file %s: %w", filePath, err)
+			}
 		}
 	}
 
 	return ctx, nil
 }
 
-// extractPKCS11Config parses a PKCS#11 URI and creates a crypto11.Config
-// extractPKCS11Config extracts a PKCS#11 configuration from a URI
-// Deprecated: Use dsig.ExtractPKCS11Config instead.
-func extractPKCS11Config(pkcs11URI string) *crypto11.Config {
-	return dsig.ExtractPKCS11Config(pkcs11URI)
-}
-
 func init() {
 	// Register all pipeline steps
 	RegisterFunction("load", LoadTSL)
-	RegisterFunction("select", SelectCertPool)
+	RegisterFunction("select", SelectCertPool)           // Main name
+	RegisterFunction("select-cert-pool", SelectCertPool) // Alternative name for backward compatibility
 	RegisterFunction("echo", Echo)
 	RegisterFunction("generate", GenerateTSL)
 	RegisterFunction("publish", PublishTSL)

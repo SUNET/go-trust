@@ -28,10 +28,10 @@ func TestPipeline_Process_Success(t *testing.T) {
 		if ctx == nil {
 			t.Fatal("ctx should not be nil")
 		}
-		if ctx.TSLs == nil {
-			ctx.TSLs = utils.NewStack[*etsi119612.TSL]()
-		}
-		ctx.TSLs.Push(nil) // simulate adding a TSL
+		ctx.EnsureTSLTrees()
+		// Create a dummy tree and add it to the stack
+		tree := &TSLTree{Root: &TSLNode{TSL: &etsi119612.TSL{}}}
+		ctx.AddTSLTree(tree) // simulate adding a TSL tree
 		return ctx, nil
 	})
 	yamlData := `
@@ -46,7 +46,7 @@ func TestPipeline_Process_Success(t *testing.T) {
 	ctx, err := pl.Process(&Context{})
 	assert.NoError(t, err)
 	assert.NotNil(t, ctx)
-	assert.Equal(t, 1, ctx.TSLs.Size())
+	assert.Equal(t, 1, ctx.TSLTrees.Size())
 }
 
 func TestPipeline_Process_UnknownMethod(t *testing.T) {
@@ -98,7 +98,7 @@ func TestPipeline_SelectStep(t *testing.T) {
 	var pipes []Pipe
 	err = yaml.Unmarshal([]byte(yamlData), &pipes)
 	pl := &Pipeline{
-		Pipes: pipes,
+		Pipes:  pipes,
 		Logger: logging.NewLogger(logging.DebugLevel),
 	}
 	ctx, err := pl.Process(&Context{})
@@ -182,7 +182,7 @@ func TestSetFetchOptions(t *testing.T) {
 		Logger: logging.NewLogger(logging.DebugLevel),
 	}
 	ctx := NewContext()
-	
+
 	// Test default values are set when the function is called with no args
 	ctx, err := SetFetchOptions(pl, ctx)
 	if err != nil {
@@ -191,7 +191,7 @@ func TestSetFetchOptions(t *testing.T) {
 	if ctx.TSLFetchOptions == nil {
 		t.Fatalf("Expected TSLFetchOptions to be initialized, but it's nil")
 	}
-	
+
 	// Test setting User-Agent
 	ctx, err = SetFetchOptions(pl, ctx, "user-agent:TestAgent/1.0")
 	if err != nil {
@@ -200,7 +200,7 @@ func TestSetFetchOptions(t *testing.T) {
 	if ctx.TSLFetchOptions.UserAgent != "TestAgent/1.0" {
 		t.Errorf("Expected User-Agent to be 'TestAgent/1.0', got '%s'", ctx.TSLFetchOptions.UserAgent)
 	}
-	
+
 	// Test setting timeout
 	ctx, err = SetFetchOptions(pl, ctx, "timeout:45s")
 	if err != nil {
@@ -209,7 +209,7 @@ func TestSetFetchOptions(t *testing.T) {
 	if ctx.TSLFetchOptions.Timeout != 45*time.Second {
 		t.Errorf("Expected timeout to be 45s, got %v", ctx.TSLFetchOptions.Timeout)
 	}
-	
+
 	// Test invalid timeout
 	ctx, err = SetFetchOptions(pl, ctx, "timeout:invalid")
 	if err == nil {
@@ -222,20 +222,20 @@ func TestLoadTSLWithOptions(t *testing.T) {
 		Logger: logging.NewLogger(logging.DebugLevel),
 	}
 	ctx := NewContext()
-	
-	// Setup fetch options
+
+	// Setup initial fetch options
 	ctx, err := SetFetchOptions(pl, ctx, "user-agent:TestAgent/2.0", "timeout:15s")
 	if err != nil {
 		t.Fatalf("Failed to set fetch options: %v", err)
 	}
-	
+
 	// Create a mock TSL file
 	tmpfile, err := os.CreateTemp("", "test-tsl-*.xml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpfile.Name())
-	
+
 	// Write minimal valid XML for a TSL
 	content := `<?xml version="1.0" encoding="UTF-8"?>
 <TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#">
@@ -252,35 +252,67 @@ func TestLoadTSLWithOptions(t *testing.T) {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
 	tmpfile.Close()
-	
-	// Test loading the TSL with options
-	ctx, err = loadTSL(pl, ctx, tmpfile.Name(), "user-agent:FileLoader/1.0")
+
+	// Update fetch options before loading the TSL
+	ctx, err = SetFetchOptions(pl, ctx, "user-agent:FileLoader/1.0")
+	if err != nil {
+		t.Fatalf("Failed to set updated fetch options: %v", err)
+	}
+
+	// Test loading the TSL with the updated options
+	ctx, err = loadTSL(pl, ctx, tmpfile.Name())
 	if err != nil {
 		t.Fatalf("Failed to load TSL: %v", err)
 	}
-	
+
 	// Verify the TSL was loaded
-	if ctx.TSLs == nil || ctx.TSLs.IsEmpty() {
+	if ctx.TSLTrees == nil || ctx.TSLTrees.IsEmpty() {
 		t.Error("Expected TSL to be loaded, but TSL stack is empty")
 	}
-	
-	// Verify the user-agent was updated for this specific load operation
+
+	// Verify the User-Agent was updated correctly
 	if ctx.TSLFetchOptions.UserAgent != "FileLoader/1.0" {
-		t.Errorf("Expected User-Agent to be updated to 'FileLoader/1.0', got '%s'", 
+		t.Errorf("Expected User-Agent to be updated to 'FileLoader/1.0', got '%s'",
 			ctx.TSLFetchOptions.UserAgent)
+	}
+}
+
+func TestSetFetchOptionsAccept(t *testing.T) {
+	pl := &Pipeline{
+		Logger: logging.NewLogger(logging.DebugLevel),
+	}
+	ctx := NewContext()
+
+	// Test setting Accept headers
+	ctx, err := SetFetchOptions(pl, ctx, "accept:application/xml,text/xml")
+	if err != nil {
+		t.Fatalf("Failed to set fetch options: %v", err)
+	}
+
+	// Verify the Accept headers were set correctly
+	expected := []string{"application/xml", "text/xml"}
+	if len(ctx.TSLFetchOptions.AcceptHeaders) != len(expected) {
+		t.Errorf("Expected %d Accept headers, got %d", len(expected), len(ctx.TSLFetchOptions.AcceptHeaders))
+	}
+
+	for i, v := range expected {
+		if i >= len(ctx.TSLFetchOptions.AcceptHeaders) || ctx.TSLFetchOptions.AcceptHeaders[i] != v {
+			t.Errorf("Accept header at position %d doesn't match. Expected '%s', got '%s'",
+				i, v, ctx.TSLFetchOptions.AcceptHeaders[i])
+		}
 	}
 }
 
 func TestLoadTSL_Errors(t *testing.T) {
 	ctx := NewContext()
 	pl := createTestPipeline(nil)
-	
+
 	// Initialize TSLFetchOptions
 	ctx, err := SetFetchOptions(pl, ctx)
 	if err != nil {
 		t.Fatalf("Failed to set fetch options: %v", err)
 	}
-	
+
 	// Invalid file path
 	_, err = loadTSL(pl, ctx, "file:///nonexistent/path.xml")
 	if err == nil {
