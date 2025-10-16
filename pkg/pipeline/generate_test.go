@@ -155,7 +155,7 @@ status: "http://test.example.com/status/valid"
 			ctx := NewContext()
 			var err error
 
-			ctx, err = GenerateTSL(nil, ctx, testDir)
+			_, err = GenerateTSL(nil, ctx, testDir)
 			if err == nil {
 				t.Errorf("Expected error for case: %s", tt.name)
 			} else {

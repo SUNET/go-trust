@@ -96,7 +96,7 @@ func TestPipeline_SelectStep(t *testing.T) {
 	tmpfile.Close()
 	yamlData := "- load: [\"" + tmpfile.Name() + "\"]\n- select: []\n"
 	var pipes []Pipe
-	err = yaml.Unmarshal([]byte(yamlData), &pipes)
+	assert.NoError(t, yaml.Unmarshal([]byte(yamlData), &pipes))
 	pl := &Pipeline{
 		Pipes:  pipes,
 		Logger: logging.NewLogger(logging.DebugLevel),
@@ -211,7 +211,7 @@ func TestSetFetchOptions(t *testing.T) {
 	}
 
 	// Test invalid timeout
-	ctx, err = SetFetchOptions(pl, ctx, "timeout:invalid")
+	_, err = SetFetchOptions(pl, ctx, "timeout:invalid")
 	if err == nil {
 		t.Errorf("Expected error for invalid timeout, got nil")
 	}

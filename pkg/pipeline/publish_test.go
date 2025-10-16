@@ -36,7 +36,7 @@ func TestPublishStep(t *testing.T) {
 	pl := &Pipeline{
 		Logger: logging.NewLogger(logging.DebugLevel),
 	}
-	ctx, err = PublishTSL(pl, ctx, testDir)
+	_, err = PublishTSL(pl, ctx, testDir)
 	assert.NoError(t, err)
 
 	// Check that the files were created

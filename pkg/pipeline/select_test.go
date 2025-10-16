@@ -50,7 +50,7 @@ func TestSelectCertPoolWithFilters(t *testing.T) {
 
 	// Test case 2: Filter by service type
 	ctx2 := ctx.Copy()
-	ctx2, err = SelectCertPool(pl, ctx2, "service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC")
+	_, err = SelectCertPool(pl, ctx2, "service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC")
 	if err != nil {
 		t.Errorf("SelectCertPool with service type filter failed: %v", err)
 	}
