@@ -79,7 +79,7 @@ func TestPKCS11SignerWithSoftHSM(t *testing.T) {
 	// Ensure the pipeline has a logger
 	pipeline.Logger = logging.NewLogger(logging.DebugLevel)
 	context := NewContext()
-	
+
 	// Initialize TSLFetchOptions
 	context, err = SetFetchOptions(pipeline, context)
 	assert.NoError(t, err, "Setting fetch options should succeed")
