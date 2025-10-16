@@ -1,0 +1,47 @@
+---
+# Example pipeline configuration showing certificate filtering options
+# This pipeline:
+# 1. Sets fetch options including max-depth for following references
+# 2. Loads TSL files from URLs including referenced TSLs
+# 3. Creates different certificate pools with different filtering criteria
+# 4. Makes the TSLs available via the API
+
+- set-fetch-options:
+   - max-depth:2
+   - user-agent:EU-TSL-Browser/1.0
+   - timeout:60s
+   - accept:application/xml,text/xml,application/xhtml+xml
+
+- load:
+   - https://ec.europa.eu/tools/lotl/eu-lotl.xml
+
+- log:
+   - "Loaded EU LOTL and referenced TSLs"
+
+# Create a certificate pool with only Qualified Certificate Authorities
+- select:
+   - include-referenced
+   - "service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC"
+   
+- log:
+   - "Certificate pool created with Qualified CA certificates"
+
+# Add additional service types if needed (example):
+# - select:
+#    - include-referenced
+#    - "service-type:http://uri.etsi.org/TrstSvc/Svctype/CA/QC"
+#    - "service-type:http://uri.etsi.org/TrstSvc/Svctype/TSA/QTST"
+#    - "status:http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted/"
+
+# Uncomment to also transform TSLs to HTML (optional)
+# - transform:
+#    - embedded:tsl-to-html.xslt
+#    - ./output
+#    - html
+#
+# - generate_index:
+#    - ./output
+#    - "EU Trust Service Lists - Index"
+#
+# - log:
+#    - "Transformation and index generation complete. Files saved to ./output directory"

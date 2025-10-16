@@ -1,0 +1,26 @@
+# Example pipeline configuration with TSL tree publishing
+# This pipeline loads a TSL tree and publishes it with the tree structure preserved
+
+# Set fetch options
+- set-fetch-options:
+  - user-agent:Go-Trust/2.0 Pipeline Example (+https://github.com/SUNET/go-trust)
+  - timeout:30s
+  - max-depth:-1  # Load all references
+
+# Load the TSL from a URL
+- load:
+  - https://example.com/tsl.xml
+
+# Transform the TSLs to include additional information
+- transform:
+  - embedded:test-transform.xslt
+  - replace
+
+# Publish the TSLs with tree structure preserved
+- publish:
+  - /tmp/tsl-output
+  - tree:territory  # Use territory-based directories
+
+# Log completion
+- echo:
+  - Published TSL tree structure
