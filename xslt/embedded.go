@@ -1,5 +1,5 @@
-// Package xslt provides embedded XSLT stylesheets for TSL transformations.package xslt
-
+// Package xslt provides embedded XSLT stylesheets for TSL transformations.
+//
 // This package uses Go's embed directive to include XSLT stylesheets directly in the
 // binary, allowing for transformations without external file dependencies. It provides
 // convenient access to standard transformation templates that can be used with the
