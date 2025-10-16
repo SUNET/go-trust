@@ -157,7 +157,7 @@
           <xsl:apply-templates select="tsl:TrustServiceStatusList"/>
           
           <footer>
-            <p>Generated using TSL to HTML Stylesheet with PicoCSS • <xsl:value-of select="format-dateTime(current-dateTime(), '[Y]-[M]-[D] [H]:[m]:[s]')"/></p>
+            <p>Generated using TSL to HTML Stylesheet with PicoCSS</p>
           </footer>
         </main>
       </body>

@@ -109,12 +109,17 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 			continue
 		}
 
-		// Create XML representation with root element
-		type TrustStatusListWrapper struct {
-			XMLName xml.Name                       `xml:"TrustServiceStatusList"`
-			List    etsi119612.TrustStatusListType `xml:",innerxml"`
+		// Create a wrapper struct with the proper XML namespace and element name
+		// The XSLT expects <tsl:TrustServiceStatusList> as the root element
+		type TrustServiceStatusList struct {
+			XMLName                        xml.Name `xml:"http://uri.etsi.org/02231/v2# TrustServiceStatusList"`
+			etsi119612.TrustStatusListType `xml:",innerxml"`
 		}
-		wrapper := TrustStatusListWrapper{List: tsl.StatusList}
+
+		wrapper := TrustServiceStatusList{
+			TrustStatusListType: tsl.StatusList,
+		}
+
 		xmlData, err := xml.MarshalIndent(wrapper, "", "  ")
 		if err != nil {
 			return ctx, fmt.Errorf("failed to marshal TSL to XML: %w", err)
@@ -140,16 +145,12 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 
 		if isReplace {
 			// Parse the transformed XML back into a TSL structure
-			var transformedWrapper TrustStatusListWrapper
-			if err := xml.Unmarshal(transformedXML, &transformedWrapper); err != nil {
+			var transformedTSL etsi119612.TSL
+			if err := xml.Unmarshal(transformedXML, &transformedTSL); err != nil {
 				return ctx, fmt.Errorf("failed to parse transformed XML for TSL %d: %w", i, err)
 			}
 
-			// Create a new TSL with the transformed content
-			transformedTSL := &etsi119612.TSL{
-				StatusList: transformedWrapper.List,
-			}
-			transformedTSLs = append(transformedTSLs, transformedTSL)
+			transformedTSLs = append(transformedTSLs, &transformedTSL)
 		} else {
 			// Determine filename for output
 			filename := fmt.Sprintf("transformed-tsl-%d.%s", i, extension)
