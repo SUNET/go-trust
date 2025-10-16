@@ -426,3 +426,37 @@ func TestToSlice_EdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestTraverseNode_EdgeCases(t *testing.T) {
+	t.Run("Traverse handles nil node", func(t *testing.T) {
+		tree := &TSLTree{Root: nil}
+		count := 0
+		
+		tree.Traverse(func(tsl *etsi119612.TSL) {
+			count++
+		})
+		
+		if count != 0 {
+			t.Errorf("Traverse on nil root should not call function, got %d calls", count)
+		}
+	})
+
+	t.Run("Traverse handles node with nil TSL", func(t *testing.T) {
+		// Create a node with nil TSL (edge case)
+		tree := &TSLTree{
+			Root: &TSLNode{
+				TSL:      nil, // Nil TSL in node
+				Children: []*TSLNode{},
+			},
+		}
+		count := 0
+		
+		tree.Traverse(func(tsl *etsi119612.TSL) {
+			count++
+		})
+		
+		if count != 0 {
+			t.Errorf("Traverse on node with nil TSL should not call function, got %d calls", count)
+		}
+	})
+}
