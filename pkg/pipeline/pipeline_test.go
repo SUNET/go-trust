@@ -142,6 +142,54 @@ func TestNewPipeline(t *testing.T) {
 	}
 }
 
+func TestNewPipeline_EdgeCases(t *testing.T) {
+	t.Run("Invalid YAML syntax", func(t *testing.T) {
+		tmpfile, err := os.CreateTemp("", "invalid-pipeline-*.yaml")
+		require.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		// Write invalid YAML
+		_, err = tmpfile.Write([]byte("invalid: yaml: content: ["))
+		require.NoError(t, err)
+		tmpfile.Close()
+
+		_, err = NewPipeline(tmpfile.Name())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse pipeline YAML")
+	})
+
+	t.Run("Empty pipeline file", func(t *testing.T) {
+		tmpfile, err := os.CreateTemp("", "empty-pipeline-*.yaml")
+		require.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		// Write empty array
+		_, err = tmpfile.Write([]byte("[]"))
+		require.NoError(t, err)
+		tmpfile.Close()
+
+		pl, err := NewPipeline(tmpfile.Name())
+		require.NoError(t, err)
+		assert.NotNil(t, pl)
+		assert.Len(t, pl.Pipes, 0)
+		assert.NotNil(t, pl.Logger)
+	})
+
+	t.Run("Pipeline with logger always set", func(t *testing.T) {
+		tmpfile, err := os.CreateTemp("", "pipeline-*.yaml")
+		require.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		_, err = tmpfile.Write([]byte("- echo: []"))
+		require.NoError(t, err)
+		tmpfile.Close()
+
+		pl, err := NewPipeline(tmpfile.Name())
+		require.NoError(t, err)
+		assert.NotNil(t, pl.Logger, "Pipeline should always have a logger")
+	})
+}
+
 func TestSelectCertPool_EdgeCases(t *testing.T) {
 	// No TSLs
 	ctx := &Context{TSLs: nil}
