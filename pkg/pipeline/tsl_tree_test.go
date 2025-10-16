@@ -113,3 +113,89 @@ func TestTSLTreeInContext(t *testing.T) {
 		t.Errorf("Traverse should visit 2 TSLs, got %d", len(visited))
 	}
 }
+
+func TestNewTSLTree_EdgeCases(t *testing.T) {
+	t.Run("Nil TSL returns empty tree", func(t *testing.T) {
+		tree := NewTSLTree(nil)
+		if tree == nil {
+			t.Fatal("NewTSLTree should never return nil")
+		}
+		if tree.Root != nil {
+			t.Error("Tree with nil TSL should have nil root")
+		}
+	})
+
+	t.Run("TSL with no references", func(t *testing.T) {
+		tsl := &etsi119612.TSL{Source: "single.xml"}
+		tree := NewTSLTree(tsl)
+
+		if tree.Root == nil {
+			t.Fatal("Root should not be nil")
+		}
+		if len(tree.Root.Children) != 0 {
+			t.Errorf("TSL with no references should have 0 children, got %d", len(tree.Root.Children))
+		}
+	})
+
+	t.Run("Traverse on nil root does nothing", func(t *testing.T) {
+		tree := &TSLTree{} // Empty tree with nil root
+		called := false
+		tree.Traverse(func(tsl *etsi119612.TSL) {
+			called = true
+		})
+
+		if called {
+			t.Error("Traverse should not call function when root is nil")
+		}
+	})
+
+	t.Run("FindBySource returns nil when not found", func(t *testing.T) {
+		tsl := &etsi119612.TSL{Source: "found.xml"}
+		tree := NewTSLTree(tsl)
+
+		found := tree.FindBySource("notfound.xml")
+		if found != nil {
+			t.Error("FindBySource should return nil for missing source")
+		}
+	})
+
+	t.Run("FindBySource on empty tree", func(t *testing.T) {
+		tree := &TSLTree{} // Empty tree
+		found := tree.FindBySource("any.xml")
+		if found != nil {
+			t.Error("FindBySource should return nil on empty tree")
+		}
+	})
+}
+
+func TestBuildTSLNode_EdgeCases(t *testing.T) {
+	t.Run("Nil referenced TSL is skipped", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		validRef := &etsi119612.TSL{Source: "valid.xml"}
+
+		// Mix nil and valid references
+		rootTSL.Referenced = []*etsi119612.TSL{nil, validRef, nil}
+
+		node := buildTSLNode(rootTSL)
+
+		if node == nil {
+			t.Fatal("buildTSLNode should not return nil for valid TSL")
+		}
+
+		// Should only have 1 child (the valid one)
+		if len(node.Children) != 1 {
+			t.Errorf("Expected 1 child (nil refs should be skipped), got %d", len(node.Children))
+		}
+
+		if node.Children[0].TSL != validRef {
+			t.Error("Child should be the valid reference")
+		}
+	})
+
+	t.Run("buildTSLNode with nil TSL returns nil", func(t *testing.T) {
+		node := buildTSLNode(nil)
+		if node != nil {
+			t.Error("buildTSLNode should return nil for nil TSL")
+		}
+	})
+}
