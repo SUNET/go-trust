@@ -244,7 +244,7 @@ func main() {
 
 	// Create server context with logger
 	serverCtx := api.NewServerContext(logger)
-	serverCtx.PipelineContext = &pipeline.Context{}
+	serverCtx.PipelineContext = pipeline.NewContext()
 
 	// Start background updater
 	api.StartBackgroundUpdater(pl, serverCtx, *freq)

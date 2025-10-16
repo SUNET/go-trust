@@ -81,7 +81,7 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 // This function is typically called at server startup to ensure TSLs are kept up-to-date.
 func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, freq time.Duration) error {
 	// Process pipeline immediately to ensure TSLs are loaded without waiting
-	newCtx, err := pl.Process(&pipeline.Context{})
+	newCtx, err := pl.Process(pipeline.NewContext())
 	serverCtx.Lock()
 	if err == nil && newCtx != nil {
 		serverCtx.PipelineContext = newCtx
@@ -100,7 +100,7 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 		for {
 			time.Sleep(freq)
 
-			newCtx, err := pl.Process(&pipeline.Context{})
+			newCtx, err := pl.Process(pipeline.NewContext())
 			serverCtx.Lock()
 			if err == nil && newCtx != nil {
 				serverCtx.PipelineContext = newCtx

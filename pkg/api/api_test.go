@@ -24,7 +24,8 @@ import (
 // Test selectCertPool with no TSLs, no trust services, and no matching policy
 func TestSelectCertPool_Errors(t *testing.T) {
 	// Case 1: No TSLs loaded
-	ctx := &pipeline.Context{TSLs: nil}
+	ctx := pipeline.NewContext()
+	ctx.TSLs = nil
 	fn, ok := pipeline.GetFunctionByName("select")
 	if !ok {
 		t.Fatal("select function not found in pipeline")
@@ -55,7 +56,8 @@ func TestSelectCertPool_Errors(t *testing.T) {
 	}
 	stack := utils.NewStack[*etsi119612.TSL]()
 	stack.Push(emptyTSL)
-	ctx = &pipeline.Context{TSLs: stack}
+	ctx = pipeline.NewContext()
+	ctx.TSLs = stack
 	fn, ok = pipeline.GetFunctionByName("select")
 	if !ok {
 		t.Fatal("select function not found in pipeline")
@@ -137,7 +139,8 @@ func TestSelectCertPool_Errors(t *testing.T) {
 	policy.ServiceTypeIdentifier = []string{"urn:other:type"}
 	stack2 := utils.NewStack[*etsi119612.TSL]()
 	stack2.Push(tslWithService)
-	ctx = &pipeline.Context{TSLs: stack2}
+	ctx = pipeline.NewContext()
+	ctx.TSLs = stack2
 	fn, ok = pipeline.GetFunctionByName("select")
 	if !ok {
 		t.Fatal("select function not found in pipeline")
@@ -224,12 +227,12 @@ func setupTestServer() (*gin.Engine, *ServerContext) {
 	// Add the test certificate to the CertPool for x5c validation
 	certPool := x509.NewCertPool()
 	certPool.AddCert(testCert)
+	ctx := pipeline.NewContext()
+	ctx.CertPool = certPool
 	serverCtx := &ServerContext{
-		PipelineContext: &pipeline.Context{
-			CertPool: certPool,
-		},
-		LastProcessed: time.Now(),
-		Logger:        logging.DefaultLogger(), // Initialize logger to prevent nil pointer panics
+		PipelineContext: ctx,
+		LastProcessed:   time.Now(),
+		Logger:          logging.DefaultLogger(), // Initialize logger to prevent nil pointer panics
 	}
 	// Store the certBase64 for use in tests
 	RegisterAPIRoutes(r, serverCtx)
@@ -391,7 +394,9 @@ func TestStartBackgroundUpdater(t *testing.T) {
 	pipeline.RegisterFunction("mockstep", func(pl *pipeline.Pipeline, ctx *pipeline.Context, args ...string) (*pipeline.Context, error) {
 		stack := utils.NewStack[*etsi119612.TSL]()
 		stack.Push(nil)
-		return &pipeline.Context{TSLs: stack}, nil
+		ctx = pipeline.NewContext()
+		ctx.TSLs = stack
+		return ctx, nil
 	})
 	pipes := []pipeline.Pipe{{MethodName: "mockstep", MethodArguments: []string{}}}
 	pl := &pipeline.Pipeline{
