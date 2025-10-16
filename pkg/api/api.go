@@ -305,16 +305,16 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 		r.POST("/test/shutdown", func(c *gin.Context) {
 			serverCtx.Logger.Info("Shutdown requested via /test/shutdown endpoint",
 				logging.F("remote_ip", c.ClientIP()))
-			
+
 			c.JSON(200, gin.H{"message": "shutting down"})
-			
+
 			// Trigger graceful shutdown after response is sent
 			go func() {
 				time.Sleep(100 * time.Millisecond) // Give time for response to be sent
 				os.Exit(0)
 			}()
 		})
-		
+
 		serverCtx.Logger.Warn("Test mode enabled: /test/shutdown endpoint is available")
 	}
 }
