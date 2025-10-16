@@ -199,3 +199,173 @@ func TestBuildTSLNode_EdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestFromSlice(t *testing.T) {
+	t.Run("Empty slice returns empty tree", func(t *testing.T) {
+		tree := FromSlice([]*etsi119612.TSL{})
+		if tree == nil {
+			t.Fatal("FromSlice should never return nil")
+		}
+		if tree.Root != nil {
+			t.Error("Empty slice should produce tree with nil root")
+		}
+	})
+
+	t.Run("Nil slice returns empty tree", func(t *testing.T) {
+		tree := FromSlice(nil)
+		if tree == nil {
+			t.Fatal("FromSlice should never return nil")
+		}
+		if tree.Root != nil {
+			t.Error("Nil slice should produce tree with nil root")
+		}
+	})
+
+	t.Run("Single TSL becomes root", func(t *testing.T) {
+		tsl := &etsi119612.TSL{Source: "single.xml"}
+		tree := FromSlice([]*etsi119612.TSL{tsl})
+
+		if tree.Root == nil {
+			t.Fatal("Root should not be nil")
+		}
+		if tree.Root.TSL != tsl {
+			t.Error("First TSL should become root")
+		}
+	})
+
+	t.Run("Multiple TSLs uses first as root", func(t *testing.T) {
+		tsl1 := &etsi119612.TSL{Source: "first.xml"}
+		tsl2 := &etsi119612.TSL{Source: "second.xml"}
+		tsl3 := &etsi119612.TSL{Source: "third.xml"}
+
+		tree := FromSlice([]*etsi119612.TSL{tsl1, tsl2, tsl3})
+
+		if tree.Root == nil {
+			t.Fatal("Root should not be nil")
+		}
+		if tree.Root.TSL != tsl1 {
+			t.Error("First TSL should become root")
+		}
+		// Note: FromSlice only uses the first TSL, doesn't create children from the rest
+	})
+}
+
+func TestItselfOrChild(t *testing.T) {
+	t.Run("Finds root TSL", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		tree := NewTSLTree(rootTSL)
+
+		if !tree.ItselfOrChild(rootTSL) {
+			t.Error("Should find the root TSL")
+		}
+	})
+
+	t.Run("Finds child TSL", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		childTSL := &etsi119612.TSL{Source: "child.xml"}
+		rootTSL.Referenced = []*etsi119612.TSL{childTSL}
+
+		tree := NewTSLTree(rootTSL)
+
+		if !tree.ItselfOrChild(childTSL) {
+			t.Error("Should find the child TSL")
+		}
+	})
+
+	t.Run("Does not find non-existent TSL", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		otherTSL := &etsi119612.TSL{Source: "other.xml"}
+		tree := NewTSLTree(rootTSL)
+
+		if tree.ItselfOrChild(otherTSL) {
+			t.Error("Should not find TSL that's not in tree")
+		}
+	})
+
+	t.Run("Returns false for nil TSL", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		tree := NewTSLTree(rootTSL)
+
+		if tree.ItselfOrChild(nil) {
+			t.Error("Should return false for nil TSL")
+		}
+	})
+
+	t.Run("Returns false for empty tree", func(t *testing.T) {
+		tree := &TSLTree{} // Empty tree
+		tsl := &etsi119612.TSL{Source: "any.xml"}
+
+		if tree.ItselfOrChild(tsl) {
+			t.Error("Should return false for empty tree")
+		}
+	})
+}
+
+func TestDepth(t *testing.T) {
+	t.Run("Empty tree has depth 0", func(t *testing.T) {
+		tree := &TSLTree{}
+		if tree.Depth() != 0 {
+			t.Errorf("Empty tree should have depth 0, got %d", tree.Depth())
+		}
+	})
+
+	t.Run("Single TSL has depth 0", func(t *testing.T) {
+		tsl := &etsi119612.TSL{Source: "single.xml"}
+		tree := NewTSLTree(tsl)
+
+		if tree.Depth() != 0 {
+			t.Errorf("Single TSL should have depth 0, got %d", tree.Depth())
+		}
+	})
+
+	t.Run("TSL with one level of children has depth 1", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		child1 := &etsi119612.TSL{Source: "child1.xml"}
+		child2 := &etsi119612.TSL{Source: "child2.xml"}
+		rootTSL.Referenced = []*etsi119612.TSL{child1, child2}
+
+		tree := NewTSLTree(rootTSL)
+
+		if tree.Depth() != 1 {
+			t.Errorf("Tree with one level should have depth 1, got %d", tree.Depth())
+		}
+	})
+
+	t.Run("TSL with two levels has depth 2", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		child := &etsi119612.TSL{Source: "child.xml"}
+		grandchild := &etsi119612.TSL{Source: "grandchild.xml"}
+
+		child.Referenced = []*etsi119612.TSL{grandchild}
+		rootTSL.Referenced = []*etsi119612.TSL{child}
+
+		tree := NewTSLTree(rootTSL)
+
+		if tree.Depth() != 2 {
+			t.Errorf("Tree with two levels should have depth 2, got %d", tree.Depth())
+		}
+	})
+
+	t.Run("TSL with multiple branches uses maximum depth", func(t *testing.T) {
+		rootTSL := &etsi119612.TSL{Source: "root.xml"}
+		
+		// Branch 1: shallow (depth 1)
+		child1 := &etsi119612.TSL{Source: "child1.xml"}
+		
+		// Branch 2: deep (depth 3)
+		child2 := &etsi119612.TSL{Source: "child2.xml"}
+		grandchild := &etsi119612.TSL{Source: "grandchild.xml"}
+		greatgrandchild := &etsi119612.TSL{Source: "greatgrandchild.xml"}
+		
+		grandchild.Referenced = []*etsi119612.TSL{greatgrandchild}
+		child2.Referenced = []*etsi119612.TSL{grandchild}
+		rootTSL.Referenced = []*etsi119612.TSL{child1, child2}
+
+		tree := NewTSLTree(rootTSL)
+
+		// Should be 3 (root -> child2 -> grandchild -> greatgrandchild)
+		if tree.Depth() != 3 {
+			t.Errorf("Tree should have depth 3 (deepest branch), got %d", tree.Depth())
+		}
+	})
+}

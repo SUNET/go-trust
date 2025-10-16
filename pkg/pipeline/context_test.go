@@ -4,8 +4,8 @@ import (
 	"crypto/x509"
 	"testing"
 
-	"github.com/SUNET/go-trust/pkg/logging"
 	etsi119612 "github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
