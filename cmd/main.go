@@ -142,6 +142,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --host         API server hostname (default: 127.0.0.1)")
 	fmt.Fprintln(os.Stderr, "  --port         API server port (default: 6001)")
 	fmt.Fprintln(os.Stderr, "  --frequency    Pipeline update frequency (default: 5m)")
+	fmt.Fprintln(os.Stderr, "  --no-server    Run pipeline once and exit (no API server)")
 	fmt.Fprintln(os.Stderr, "Logging options:")
 	fmt.Fprintln(os.Stderr, "  --log-level    Logging level: debug, info, warn, error, fatal (default: info)")
 	fmt.Fprintln(os.Stderr, "  --log-format   Logging format: text or json (default: text)")
@@ -174,6 +175,7 @@ func main() {
 	host := flag.String("host", "127.0.0.1", "API server hostname")
 	port := flag.String("port", "6001", "API server port")
 	freq := flag.Duration("frequency", 5*time.Minute, "Pipeline update frequency (e.g. 10s, 1m, 5m)")
+	noServer := flag.Bool("no-server", false, "Run pipeline once and exit (no API server)")
 
 	// Logging configuration
 	logLevel := flag.String("log-level", "info", "Logging level (debug, info, warn, error, fatal)")
@@ -241,6 +243,26 @@ func main() {
 	}
 	// Create a pipeline with our configured logger
 	pl = pl.WithLogger(logger)
+
+	// If --no-server flag is set, run pipeline once and exit
+	if *noServer {
+		logger.Info("Running pipeline in one-shot mode (no server)",
+			logging.F("pipeline", pipelineFile),
+			logging.F("version", Version))
+
+		ctx := pipeline.NewContext()
+		_, err := pl.Process(ctx)
+		if err != nil {
+			logger.Error("Pipeline execution failed",
+				logging.F("error", err.Error()),
+				logging.F("pipeline", pipelineFile))
+			os.Exit(1)
+		}
+
+		logger.Info("Pipeline execution completed successfully",
+			logging.F("pipeline", pipelineFile))
+		os.Exit(0)
+	}
 
 	// Create server context with logger
 	serverCtx := api.NewServerContext(logger)

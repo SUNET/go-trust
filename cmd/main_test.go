@@ -199,6 +199,65 @@ func TestInvalidPipelineFile(t *testing.T) {
 	t.Logf("Error output: %s", strings.TrimSpace(outputStr))
 }
 
+// TestNoServerMode tests the --no-server flag for one-shot pipeline execution
+func TestNoServerMode(t *testing.T) {
+	// Create a simple test pipeline
+	tempPipeline := createTempPipeline(t, `
+- log:
+    - "Test pipeline in no-server mode"
+- echo:
+    - "Processing complete"
+`)
+	defer os.Remove(tempPipeline)
+
+	// Run with --no-server flag
+	cmd := exec.Command("./gt-test", "--no-server", tempPipeline)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Pipeline should execute successfully in no-server mode")
+
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "Running pipeline in one-shot mode", "Should indicate no-server mode")
+	assert.Contains(t, outputStr, "Pipeline execution completed successfully", "Should complete successfully")
+	assert.NotContains(t, outputStr, "API server", "Should not start API server")
+	t.Logf("No-server mode output: %s", strings.TrimSpace(outputStr))
+}
+
+// TestNoServerModeWithLogging tests --no-server with different log levels
+func TestNoServerModeWithLogging(t *testing.T) {
+	tempPipeline := createTempPipeline(t, `
+- log:
+    - "Testing with debug logging"
+`)
+	defer os.Remove(tempPipeline)
+
+	// Test with debug log level
+	cmd := exec.Command("./gt-test", "--no-server", "--log-level", "debug", tempPipeline)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Should succeed with debug logging")
+
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "Pipeline execution completed successfully", "Should complete")
+	t.Logf("Debug logging output length: %d bytes", len(output))
+}
+
+// TestNoServerModeInvalidPipeline tests --no-server with an invalid pipeline
+func TestNoServerModeInvalidPipeline(t *testing.T) {
+	tempPipeline := createTempPipeline(t, `
+- invalid_step:
+    - "This step does not exist"
+`)
+	defer os.Remove(tempPipeline)
+
+	// Run with --no-server flag
+	cmd := exec.Command("./gt-test", "--no-server", tempPipeline)
+	output, err := cmd.CombinedOutput()
+	require.Error(t, err, "Should fail with invalid pipeline")
+
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "Pipeline execution failed", "Should show execution failure")
+	t.Logf("Error output: %s", strings.TrimSpace(outputStr))
+}
+
 // TestBasicPipelineExecution tests running a basic pipeline without API calls
 // This test uses a simple pipeline that doesn't start a listener
 func TestBasicPipelineExecution(t *testing.T) {
@@ -379,7 +438,7 @@ func TestAPIAndHTMLExample(t *testing.T) {
 			entries, err := os.ReadDir(htmlDir)
 			if err == nil && len(entries) > 0 {
 				t.Logf("HTML directory contains %d files", len(entries))
-				
+
 				// Check for index file
 				indexPath := filepath.Join(htmlDir, "index.html")
 				if _, err := os.Stat(indexPath); err == nil {
