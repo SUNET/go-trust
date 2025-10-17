@@ -17,8 +17,11 @@ check-coverage: check-go-version install-go-test-coverage ## generate coverage r
 	go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
 	${GOBIN}/go-test-coverage --config=./.testcoverage.yml
 
+.PHONY: all
+all: check-go-version fmt vet test build ## Run all checks and build (CI pipeline)
+
 .PHONY: default
-default: check-go-version build
+default: build
 
 .PHONY: check-go-version
 check-go-version: ## Check if the current Go version matches the one required by go.mod
@@ -87,6 +90,48 @@ lint: ## Run linters (golangci-lint, gosec, staticcheck)
 	$(MAKE) gosec
 	$(MAKE) staticcheck
 
+.PHONY: fmt
+fmt: ## Format all Go code with gofmt
+	@echo "Formatting Go code..."
+	@gofmt -s -w . 2>&1 | grep -v "expected" || true
+	@echo "✓ Code formatted"
+
+.PHONY: vet
+vet: ## Run go vet on all packages
+	@echo "Running go vet..."
+	@go vet ./...
+	@echo "✓ Vet passed"
+
+.PHONY: coverage
+coverage: ## Generate and display coverage report
+	go test ./... -coverprofile=cover.out -covermode=atomic
+	go tool cover -func=cover.out
+	@echo "\nTo view HTML coverage report, run: go tool cover -html=cover.out"
+
+.PHONY: coverage-html
+coverage-html: ## Generate and open HTML coverage report
+	go test ./... -coverprofile=cover.out -covermode=atomic
+	go tool cover -html=cover.out
+
+.PHONY: bench
+bench: ## Run all benchmarks
+	@echo "Running benchmarks..."
+	go test ./... -bench=. -run=^$$ -benchmem
+
+.PHONY: bench-api
+bench-api: ## Run API benchmarks only
+	go test ./pkg/api -bench=. -run=^$$ -benchmem
+
+.PHONY: tools
+tools: ## Install development tools
+	@echo "Installing development tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install golang.org/x/tools/cmd/deadcode@latest
+	go install github.com/securego/gosec/v2/cmd/gosec@latest
+	go install honnef.co/go/tools/cmd/staticcheck@latest
+	go install github.com/vladopajic/go-test-coverage/v2@latest
+	@echo "✓ Development tools installed"
+
 vscode: ## Install dependencies for VSCode development
 	$(info Install APT packages)
 	sudo apt-get update && sudo apt-get install -y \
@@ -96,8 +141,24 @@ vscode: ## Install dependencies for VSCode development
 	go install golang.org/x/tools/cmd/deadcode@latest && \
 	go install github.com/securego/gosec/v2/cmd/gosec@latest && \
 	go install honnef.co/go/tools/cmd/staticcheck@latest && \
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
+	go install github.com/golangci-lint/golangci-lint@latest && \
 	go install github.com/xuri/xgen/cmd/xgen@latest
+
+.PHONY: setup
+setup: ## Set up development environment (run once)
+	@echo "Setting up development environment..."
+	@bash scripts/setup-dev.sh
+
+.PHONY: quick
+quick: fmt vet ## Quick checks (fmt + vet) before commit
+
+.PHONY: ci
+ci: all ## Run CI pipeline (same as 'all')
+
+.PHONY: watch
+watch: ## Watch for changes and run tests (requires entr)
+	@echo "Watching for changes... (press Ctrl+C to stop)"
+	@find . -name "*.go" | entr -c make test
 
 .PHONY: docker
 docker: check-go-version build ## Build a minimal Docker image

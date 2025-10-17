@@ -1,3 +1,76 @@
 {
-    "makefile.configureOnOpen": false
+  "makefile.configureOnOpen": false,
+  "go.testFlags": ["-v", "-race", "-count=1"],
+  "go.testTimeout": "10m",
+  "go.coverOnSave": false,
+  "go.coverOnSingleTest": true,
+  "go.coverOnSingleTestFile": true,
+  "go.coverageDecorator": {
+    "type": "gutter",
+    "coveredHighlightColor": "rgba(64,128,64,0.5)",
+    "uncoveredHighlightColor": "rgba(128,64,64,0.5)",
+    "coveredGutterStyle": "blockgreen",
+    "uncoveredGutterStyle": "blockred"
+  },
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--fast"],
+  "go.lintOnSave": "package",
+  "go.formatTool": "gofmt",
+  "go.useLanguageServer": true,
+  "go.buildOnSave": "off",
+  "go.vetOnSave": "off",
+  "gopls": {
+    "ui.semanticTokens": true,
+    "ui.completion.usePlaceholders": true,
+    "formatting.gofumpt": false,
+    "analyses": {
+      "unusedparams": true,
+      "shadow": true,
+      "nilness": true,
+      "unusedwrite": true,
+      "useany": true
+    },
+    "staticcheck": true
+  },
+  "go.toolsManagement.autoUpdate": true,
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "golang.go",
+    "editor.insertSpaces": false,
+    "editor.tabSize": 4
+  },
+  "[go.mod]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/cover.out": true,
+    "**/gt": true
+  },
+  "search.exclude": {
+    "**/vendor": true,
+    "**/cover.out": true
+  },
+  "editor.rulers": [100, 120],
+  "editor.minimap.enabled": true,
+  "terminal.integrated.env.linux": {
+    "CGO_ENABLED": "1"
+  },
+  "terminal.integrated.env.osx": {
+    "CGO_ENABLED": "1"
+  },
+  "git.ignoreLimitWarning": true,
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  }
 }

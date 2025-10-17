@@ -1,0 +1,68 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch go-trust server",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/main.go",
+      "args": [
+        "--pipeline", "${workspaceFolder}/examples/pipeline.yaml",
+        "--log-level", "debug"
+      ],
+      "env": {
+        "CGO_ENABLED": "1"
+      },
+      "showLog": true,
+      "trace": "verbose"
+    },
+    {
+      "name": "Launch go-trust (custom args)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/main.go",
+      "args": [],
+      "env": {
+        "CGO_ENABLED": "1"
+      },
+      "showLog": true
+    },
+    {
+      "name": "Test Current File",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${file}",
+      "env": {
+        "CGO_ENABLED": "1"
+      }
+    },
+    {
+      "name": "Test Current Package",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${fileDirname}",
+      "env": {
+        "CGO_ENABLED": "1"
+      }
+    },
+    {
+      "name": "Test All Packages",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}",
+      "args": [
+        "-v",
+        "-race",
+        "-count=1"
+      ],
+      "env": {
+        "CGO_ENABLED": "1"
+      }
+    }
+  ]
+}

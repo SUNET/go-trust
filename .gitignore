@@ -15,15 +15,33 @@ gt
 
 # Test coverage output
 coverage*.*
+cover.out
 
 # postgres data volume used by postgres server container for testing purpose
 testdata/postgres
 
 # server binary
 ./server
+/main
 
 # PID file generated to support live reload
 .pid
 
-cover.out
-/main
+# IDE and editor files
+.vscode/.history/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+bin/
+dist/
+build/
+Dockerfile
+
+# Temporary files
+tmp/
+temp/
+*.tmp
