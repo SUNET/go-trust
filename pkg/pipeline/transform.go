@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/SUNET/g119612/pkg/etsi119612"
+	"github.com/SUNET/go-trust/pkg/validation"
 	"github.com/SUNET/go-trust/xslt"
 )
 
@@ -104,6 +105,18 @@ func TransformTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) 
 	extension := "xml"
 	if len(args) >= 3 {
 		extension = args[2]
+	}
+
+	// Validate XSLT path before processing
+	if err := validation.ValidateXSLTPath(xsltPath); err != nil {
+		return ctx, fmt.Errorf("invalid XSLT path: %w", err)
+	}
+
+	// If mode is not "replace", validate it as an output directory
+	if mode != "replace" {
+		if err := validation.ValidateOutputDirectory(mode); err != nil {
+			return ctx, fmt.Errorf("invalid output directory: %w", err)
+		}
 	}
 
 	// Check if this is an embedded XSLT or a file path

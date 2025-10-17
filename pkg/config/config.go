@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SUNET/go-trust/pkg/validation"
 	"gopkg.in/yaml.v3"
 )
 
@@ -92,6 +93,11 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Load from file if path provided
 	if configPath != "" {
+		// Validate config path before loading
+		if err := validation.ValidateConfigPath(configPath); err != nil {
+			return nil, fmt.Errorf("invalid config path: %w", err)
+		}
+
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file: %w", err)

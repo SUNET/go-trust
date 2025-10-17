@@ -121,6 +121,35 @@ XSLT stylesheets are cached after first use to reduce I/O overhead:
 
 Combined with concurrent processing, these optimizations make Go-Trust particularly efficient when processing EU Trust Lists with 20+ member state TSLs.
 
+### Security Features
+
+Go-Trust implements comprehensive input validation and sanitization to protect against common security vulnerabilities:
+
+#### Input Validation
+
+All external inputs are validated before processing:
+
+- **URL validation**: Enforces allowed schemes (http/https/file), detects path traversal attempts
+- **File path validation**: Prevents null byte injection, path traversal, and access to system directories
+- **XSLT path validation**: Validates embedded and file-based XSLT references
+- **Output directory validation**: Blocks writes to system directories (/etc, /sys, C:\Windows)
+- **Config file validation**: Ensures proper YAML file extensions and safe paths
+
+#### Protection Features
+
+- **Path traversal prevention**: Detects and blocks `..` sequences in paths
+- **Null byte detection**: Prevents null byte injection attacks
+- **System directory protection**: Blacklists known system directories
+- **Scheme whitelisting**: Only allows explicitly permitted URL schemes
+- **Automatic sanitization**: Cleans and normalizes file paths before use
+
+The validation layer is automatically applied to:
+- TSL loading from URLs or files
+- XSLT transformation paths
+- Output directories for publishing
+- Certificate and key file paths for signing
+- Configuration file paths
+
 ## Digital Signatures
 
 Go-Trust includes a dedicated package for XML digital signatures in [pkg/dsig](./pkg/dsig/). This package supports:

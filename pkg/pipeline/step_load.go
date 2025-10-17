@@ -7,6 +7,7 @@ import (
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/utils"
+	"github.com/SUNET/go-trust/pkg/validation"
 )
 
 // LoadTSL is a pipeline step that loads Trust Service Lists (TSLs) from a URL or file path,
@@ -46,6 +47,11 @@ func LoadTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 	url := args[0]
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "file://" + url
+	}
+
+	// Validate the URL before processing
+	if err := validation.ValidateURL(url, validation.TSLURLOptions()); err != nil {
+		return ctx, fmt.Errorf("invalid TSL URL: %w", err)
 	}
 
 	// Parse optional filter argument

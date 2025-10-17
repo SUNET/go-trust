@@ -10,6 +10,7 @@ import (
 	"github.com/SUNET/g119612/pkg/etsi119612"
 	"github.com/SUNET/go-trust/pkg/dsig"
 	"github.com/SUNET/go-trust/pkg/logging"
+	"github.com/SUNET/go-trust/pkg/validation"
 )
 
 // PublishTSL is a pipeline step that serializes TSLs to XML files in a specified directory.
@@ -45,11 +46,23 @@ func PublishTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 
 	dirPath := args[0]
 
+	// Validate output directory before processing
+	if err := validation.ValidateOutputDirectory(dirPath); err != nil {
+		return ctx, fmt.Errorf("invalid output directory: %w", err)
+	}
+
 	// Create a signer if signer configuration is provided
 	var signer dsig.XMLSigner
 
 	// Check if this is a file-based signer (with certificate and key files)
 	if len(args) >= 3 && !strings.HasPrefix(args[1], "pkcs11:") {
+		// Validate certificate and key file paths
+		if err := validation.ValidateFilePath(args[1]); err != nil {
+			return ctx, fmt.Errorf("invalid certificate path: %w", err)
+		}
+		if err := validation.ValidateFilePath(args[2]); err != nil {
+			return ctx, fmt.Errorf("invalid key path: %w", err)
+		}
 		signer = dsig.NewFileSigner(args[1], args[2])
 	}
 
