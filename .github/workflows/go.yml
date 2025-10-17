@@ -51,7 +51,12 @@ jobs:
       uses: tj-actions/coverage-badge-go@v2
       with:
         filename: coverage.txt
-        output: .badges/main/coverage.svg
+
+    - name: Move coverage badge to badges directory
+      if: github.ref == 'refs/heads/main'
+      run: |
+        mkdir -p .badges/main
+        mv coverage.svg .badges/main/coverage.svg 2>/dev/null || true
 
     - name: Get Go version
       id: go-version
