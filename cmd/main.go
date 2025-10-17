@@ -85,9 +85,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/SUNET/go-trust/pkg/api"
+	"github.com/SUNET/go-trust/pkg/config"
 	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/SUNET/go-trust/pkg/pipeline"
 	"github.com/gin-gonic/gin"
@@ -139,6 +139,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "Options:")
 	fmt.Fprintln(os.Stderr, "  --help         Show this help message and exit.")
 	fmt.Fprintln(os.Stderr, "  --version      Show version information and exit.")
+	fmt.Fprintln(os.Stderr, "  --config       Configuration file path (YAML format)")
 	fmt.Fprintln(os.Stderr, "  --host         API server hostname (default: 127.0.0.1)")
 	fmt.Fprintln(os.Stderr, "  --port         API server port (default: 6001)")
 	fmt.Fprintln(os.Stderr, "  --frequency    Pipeline update frequency (default: 5m)")
@@ -147,6 +148,11 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --log-level    Logging level: debug, info, warn, error, fatal (default: info)")
 	fmt.Fprintln(os.Stderr, "  --log-format   Logging format: text or json (default: text)")
 	fmt.Fprintln(os.Stderr, "  --log-output   Log output: stdout, stderr, or file path (default: stdout)")
+	fmt.Fprintln(os.Stderr, "\nConfiguration precedence (highest to lowest):")
+	fmt.Fprintln(os.Stderr, "  1. Command-line flags")
+	fmt.Fprintln(os.Stderr, "  2. Environment variables (GT_* prefix)")
+	fmt.Fprintln(os.Stderr, "  3. Configuration file (--config)")
+	fmt.Fprintln(os.Stderr, "  4. Built-in defaults")
 	fmt.Fprintln(os.Stderr, "")
 }
 
@@ -172,15 +178,16 @@ func usage() {
 func main() {
 	showHelp := flag.Bool("help", false, "Show help message")
 	showVersion := flag.Bool("version", false, "Show version information")
-	host := flag.String("host", "127.0.0.1", "API server hostname")
-	port := flag.String("port", "6001", "API server port")
-	freq := flag.Duration("frequency", 5*time.Minute, "Pipeline update frequency (e.g. 10s, 1m, 5m)")
+	configFile := flag.String("config", "", "Configuration file path (YAML format)")
+	host := flag.String("host", "", "API server hostname (overrides config file)")
+	port := flag.String("port", "", "API server port (overrides config file)")
+	freq := flag.Duration("frequency", 0, "Pipeline update frequency (overrides config file)")
 	noServer := flag.Bool("no-server", false, "Run pipeline once and exit (no API server)")
 
 	// Logging configuration
-	logLevel := flag.String("log-level", "info", "Logging level (debug, info, warn, error, fatal)")
-	logFormat := flag.String("log-format", "text", "Logging format (text, json)")
-	logOutput := flag.String("log-output", "stdout", "Log output (stdout, stderr, or file path)")
+	logLevel := flag.String("log-level", "", "Logging level (overrides config file)")
+	logFormat := flag.String("log-format", "", "Logging format (overrides config file)")
+	logOutput := flag.String("log-output", "", "Log output (overrides config file)")
 
 	flag.Parse()
 
@@ -202,18 +209,52 @@ func main() {
 
 	pipelineFile := args[0]
 
-	// Configure logger based on command line arguments
-	parsedLogLevel := parseLogLevel(*logLevel)
+	// Load configuration with precedence: defaults → config file → env vars → command-line flags
+	// Step 1 & 2 & 3: Load defaults, config file, and apply env vars
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Step 4: Apply command-line flag overrides (highest precedence)
+	if *host != "" {
+		cfg.Server.Host = *host
+	}
+	if *port != "" {
+		cfg.Server.Port = *port
+	}
+	if *freq != 0 {
+		cfg.Server.Frequency = *freq
+	}
+	if *logLevel != "" {
+		cfg.Logging.Level = *logLevel
+	}
+	if *logFormat != "" {
+		cfg.Logging.Format = *logFormat
+	}
+	if *logOutput != "" {
+		cfg.Logging.Output = *logOutput
+	}
+
+	// Validate the final configuration
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Configure logger based on merged configuration
+	parsedLogLevel := parseLogLevel(cfg.Logging.Level)
 	var logger logging.Logger
 
-	if strings.ToLower(*logFormat) == "json" {
+	if strings.ToLower(cfg.Logging.Format) == "json" {
 		logger = logging.JSONLogger(parsedLogLevel)
 	} else {
 		logger = logging.NewLogger(parsedLogLevel)
 	}
 
 	// Configure log output
-	output := strings.ToLower(*logOutput)
+	output := strings.ToLower(cfg.Logging.Output)
 	switch output {
 	case "stdout":
 		// Default is already stdout
@@ -221,13 +262,13 @@ func main() {
 		logger.(logging.OutputConfigurable).SetOutput(os.Stderr)
 	default:
 		// Assume it's a file path
-		dir := filepath.Dir(*logOutput)
+		dir := filepath.Dir(cfg.Logging.Output)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
 			os.Exit(1)
 		}
 
-		file, err := os.OpenFile(*logOutput, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		file, err := os.OpenFile(cfg.Logging.Output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 			os.Exit(1)
@@ -269,19 +310,20 @@ func main() {
 	serverCtx.PipelineContext = pipeline.NewContext()
 
 	// Start background updater
-	api.StartBackgroundUpdater(pl, serverCtx, *freq)
+	api.StartBackgroundUpdater(pl, serverCtx, cfg.Server.Frequency)
 
 	// Gin API server
 	r := gin.Default()
 	api.RegisterAPIRoutes(r, serverCtx)
-	listenAddr := fmt.Sprintf("%s:%s", *host, *port)
+	listenAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 
 	// Log startup information
 	logger.Info("API server starting",
 		logging.F("address", listenAddr),
 		logging.F("version", Version),
 		logging.F("pipeline", pipelineFile),
-		logging.F("log_level", *logLevel))
+		logging.F("log_level", cfg.Logging.Level),
+		logging.F("frequency", cfg.Server.Frequency.String()))
 
 	if err := r.Run(listenAddr); err != nil {
 		logger.Error("API server failed to start",

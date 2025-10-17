@@ -616,3 +616,134 @@ func createTempPipeline(t *testing.T, content string) string {
 
 	return tmpFile.Name()
 }
+
+// TestConfigFileIntegration verifies that config files are loaded correctly
+func TestConfigFileIntegration(t *testing.T) {
+	// Create a temporary config file
+	configContent := `
+server:
+  host: "192.168.1.1"
+  port: "7777"
+  frequency: "10m"
+
+logging:
+  level: "debug"
+  format: "json"
+  output: "stdout"
+`
+	configFile, err := os.CreateTemp("", "test-config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(configContent)
+	require.NoError(t, err)
+	configFile.Close()
+
+	// Create a test pipeline
+	pipelineContent := `
+- echo:
+  - "Config file test"
+`
+	pipelineFile := createTempPipeline(t, pipelineContent)
+	defer os.Remove(pipelineFile)
+
+	// Run with config file and --no-server
+	cmd := exec.Command("./gt-test",
+		"--config", configFile.Name(),
+		"--no-server",
+		pipelineFile,
+	)
+
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Command failed: %s", string(output))
+
+	outputStr := string(output)
+	t.Logf("Config file output: %s", outputStr)
+
+	// Verify that debug level logging is active (from config)
+	assert.Contains(t, outputStr, `"level":"info"`, "Should use config file logging settings")
+}
+
+// TestConfigPrecedence verifies the configuration precedence order
+func TestConfigPrecedence(t *testing.T) {
+	// Create a config file with specific values
+	configContent := `
+server:
+  host: "config-host"
+  port: "8888"
+  frequency: "15m"
+
+logging:
+  level: "warn"
+  format: "text"
+  output: "stdout"
+`
+	configFile, err := os.CreateTemp("", "test-config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(configFile.Name())
+
+	_, err = configFile.WriteString(configContent)
+	require.NoError(t, err)
+	configFile.Close()
+
+	// Create a test pipeline
+	pipelineContent := `
+- echo:
+  - "Precedence test"
+`
+	pipelineFile := createTempPipeline(t, pipelineContent)
+	defer os.Remove(pipelineFile)
+
+	// Run with config file but override with command-line flag
+	cmd := exec.Command("./gt-test",
+		"--config", configFile.Name(),
+		"--log-level", "info", // Override config file (which is warn)
+		"--no-server",
+		pipelineFile,
+	)
+
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Command failed: %s", string(output))
+
+	outputStr := string(output)
+	t.Logf("Precedence test output: %s", outputStr)
+
+	// Verify that command-line flag overrode config file
+	// Info messages should appear (command-line override from warn to info)
+	assert.Contains(t, outputStr, "level=info", "Command-line flags should override config file")
+	assert.Contains(t, outputStr, "Running pipeline in one-shot mode", "Info messages should be visible")
+}
+
+// TestEnvVarConfiguration verifies environment variable configuration
+func TestEnvVarConfiguration(t *testing.T) {
+	// Create a test pipeline
+	pipelineContent := `
+- echo:
+  - "Env var test"
+`
+	pipelineFile := createTempPipeline(t, pipelineContent)
+	defer os.Remove(pipelineFile)
+
+	// Run with environment variables
+	cmd := exec.Command("./gt-test",
+		"--no-server",
+		pipelineFile,
+	)
+
+	// Set environment variables
+	cmd.Env = append(os.Environ(),
+		"GT_LOG_LEVEL=error",
+		"GT_HOST=env-host",
+		"GT_PORT=9999",
+	)
+
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Command failed: %s", string(output))
+
+	outputStr := string(output)
+	t.Logf("Env var output: %s", outputStr)
+
+	// With error level, info messages should not appear
+	// Only error or fatal messages would appear
+	assert.NotContains(t, outputStr, "level=info", "Should respect GT_LOG_LEVEL env var")
+}

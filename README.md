@@ -158,6 +158,7 @@ Usage: gt [options] <pipeline.yaml>
 Options:
   --help         Show this help message and exit
   --version      Show version information and exit
+  --config       Configuration file path (YAML format)
   --host         API server hostname (default: 127.0.0.1)
   --port         API server port (default: 6001)
   --frequency    Pipeline update frequency (default: 5m)
@@ -166,7 +167,63 @@ Logging options:
   --log-level    Logging level: debug, info, warn, error, fatal (default: info)
   --log-format   Logging format: text or json (default: text)
   --log-output   Log output: stdout, stderr, or file path (default: stdout)
+
+Configuration precedence (highest to lowest):
+  1. Command-line flags
+  2. Environment variables (GT_* prefix)
+  3. Configuration file (--config)
+  4. Built-in defaults
 ```
+
+#### Configuration File
+
+Go-Trust supports configuration via YAML files for easier deployment and management. Create a `config.yaml` file:
+
+```yaml
+server:
+  host: "0.0.0.0"
+  port: "6001"
+  frequency: "5m"
+
+logging:
+  level: "info"
+  format: "text"
+  output: "stdout"
+
+pipeline:
+  timeout: "30s"
+  max_request_size: 10485760
+  max_redirects: 3
+  allowed_hosts:
+    - "*.europa.eu"
+
+security:
+  rate_limit_rps: 100
+  enable_cors: false
+  allowed_origins: []
+```
+
+Use the config file:
+
+```bash
+gt --config config.yaml pipeline.yaml
+```
+
+#### Environment Variables
+
+All configuration options can be set via environment variables with the `GT_` prefix:
+
+```bash
+export GT_HOST="0.0.0.0"
+export GT_PORT="8080"
+export GT_LOG_LEVEL="debug"
+export GT_FREQUENCY="10m"
+export GT_RATE_LIMIT_RPS="200"
+
+gt pipeline.yaml
+```
+
+See [example/config.yaml](./example/config.yaml) for a complete configuration example with all available options and documentation.
 
 ### API Endpoints
 
