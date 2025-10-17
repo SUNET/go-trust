@@ -35,8 +35,10 @@ echo -e "${GREEN}✓ Code formatting OK${NC}"
 
 # 2. Go vet
 echo -e "${YELLOW}→ Running go vet...${NC}"
-if ! go vet ./... 2>&1 | grep -v "vendor/"; then
+VET_OUTPUT=$(go vet ./... 2>&1 | grep -v "vendor/" || true)
+if [ -n "$VET_OUTPUT" ]; then
     echo -e "${RED}✗ go vet failed${NC}"
+    echo "$VET_OUTPUT"
     exit 1
 fi
 echo -e "${GREEN}✓ go vet passed${NC}"
