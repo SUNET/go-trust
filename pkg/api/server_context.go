@@ -21,6 +21,7 @@ type ServerContext struct {
 	LastProcessed   time.Time         // Timestamp when the pipeline was last processed
 	Logger          logging.Logger    // Logger for API operations (never nil)
 	RateLimiter     *RateLimiter      // Rate limiter for API endpoints (optional)
+	Metrics         *Metrics          // Prometheus metrics (optional)
 }
 
 // Lock locks the ServerContext for writing.

@@ -83,6 +83,9 @@
 //	                          Returns 200 if ready, 503 if not ready
 //	                          Returns: {"status": "ready|not_ready", "ready": bool, "tsl_count": <number>, ...}
 //
+//	GET /metrics            - Prometheus metrics endpoint for monitoring
+//	                          Returns: Prometheus-formatted metrics (text/plain)
+//
 // See: https://github.com/SUNET/go-trust for more information
 package main
 
@@ -316,6 +319,11 @@ func main() {
 	serverCtx := api.NewServerContext(logger)
 	serverCtx.PipelineContext = pipeline.NewContext()
 
+	// Initialize Prometheus metrics
+	metrics := api.NewMetrics()
+	serverCtx.Metrics = metrics
+	logger.Info("Metrics initialized")
+
 	// Configure rate limiting if enabled
 	if cfg.Security.RateLimitRPS > 0 {
 		// Use burst size of 10% of RPS, minimum of 5
@@ -334,6 +342,11 @@ func main() {
 
 	// Gin API server
 	r := gin.Default()
+	
+	// Register metrics endpoint first (includes middleware)
+	api.RegisterMetricsEndpoint(r, metrics)
+	
+	// Register other API routes
 	api.RegisterAPIRoutes(r, serverCtx)
 	api.RegisterHealthEndpoints(r, serverCtx)
 	listenAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)

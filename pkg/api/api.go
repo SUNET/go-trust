@@ -82,7 +82,10 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 // This function is typically called at server startup to ensure TSLs are kept up-to-date.
 func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, freq time.Duration) error {
 	// Process pipeline immediately to ensure TSLs are loaded without waiting
+	start := time.Now()
 	newCtx, err := pl.Process(pipeline.NewContext())
+	duration := time.Since(start)
+	
 	serverCtx.Lock()
 	if err == nil && newCtx != nil {
 		serverCtx.PipelineContext = newCtx
@@ -90,9 +93,19 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 		tslCount := countTSLs(newCtx)
 		serverCtx.Logger.Info("Initial pipeline processing successful",
 			logging.F("tsl_count", tslCount))
+		
+		// Record metrics if available
+		if serverCtx.Metrics != nil {
+			serverCtx.Metrics.RecordPipelineExecution(duration, tslCount, nil)
+		}
 	} else if err != nil {
 		serverCtx.Logger.Error("Initial pipeline processing failed",
 			logging.F("error", err.Error()))
+		
+		// Record error metrics if available
+		if serverCtx.Metrics != nil {
+			serverCtx.Metrics.RecordPipelineExecution(duration, 0, err)
+		}
 	}
 	serverCtx.Unlock()
 
@@ -101,24 +114,38 @@ func StartBackgroundUpdater(pl *pipeline.Pipeline, serverCtx *ServerContext, fre
 		for {
 			time.Sleep(freq)
 
+			start := time.Now()
 			newCtx, err := pl.Process(pipeline.NewContext())
+			duration := time.Since(start)
+			
 			serverCtx.Lock()
 			if err == nil && newCtx != nil {
 				serverCtx.PipelineContext = newCtx
 				serverCtx.LastProcessed = time.Now()
 			}
 			serverCtx.Unlock()
+			
 			if err != nil {
 				// ServerContext always has a logger after our improvements
 				serverCtx.Logger.Error("Pipeline processing failed",
 					logging.F("error", err.Error()),
 					logging.F("frequency", freq.String()))
+				
+				// Record error metrics if available
+				if serverCtx.Metrics != nil {
+					serverCtx.Metrics.RecordPipelineExecution(duration, 0, err)
+				}
 			} else {
 				// Log successful update
 				tslCount := countTSLs(newCtx)
 				serverCtx.Logger.Info("Pipeline processed successfully",
 					logging.F("frequency", freq.String()),
 					logging.F("tsl_count", tslCount))
+				
+				// Record metrics if available
+				if serverCtx.Metrics != nil {
+					serverCtx.Metrics.RecordPipelineExecution(duration, tslCount, nil)
+				}
 			}
 		}
 	}()
@@ -246,26 +273,47 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 			certPool := serverCtx.PipelineContext.CertPool
 			serverCtx.RUnlock()
 			if certPool != nil {
+				start := time.Now()
 				opts := x509.VerifyOptions{
 					Roots: certPool,
 				}
 				_, err := allCerts[0].Verify(opts)
+				validationDuration := time.Since(start)
+				
 				if err == nil {
 					serverCtx.Logger.Info("AuthZEN request approved",
 						logging.F("remote_ip", c.ClientIP()),
 						logging.F("subject", req.Subject.ID))
+					
+					// Record successful validation metrics
+					if serverCtx.Metrics != nil {
+						serverCtx.Metrics.RecordCertValidation(validationDuration, true)
+					}
+					
 					c.JSON(200, buildResponse(true, ""))
 				} else {
 					serverCtx.Logger.Info("AuthZEN request denied",
 						logging.F("remote_ip", c.ClientIP()),
 						logging.F("subject", req.Subject.ID),
 						logging.F("error", err.Error()))
+					
+					// Record failed validation metrics
+					if serverCtx.Metrics != nil {
+						serverCtx.Metrics.RecordCertValidation(validationDuration, false)
+					}
+					
 					c.JSON(200, buildResponse(false, err.Error()))
 				}
 				return
 			} else {
 				serverCtx.Logger.Error("AuthZEN request failed - CertPool is nil",
 					logging.F("remote_ip", c.ClientIP()))
+				
+				// Record error metrics
+				if serverCtx.Metrics != nil {
+					serverCtx.Metrics.RecordError("certpool_nil", "authzen_decision")
+				}
+				
 				c.JSON(200, buildResponse(false, "CertPool is nil"))
 				return
 			}
