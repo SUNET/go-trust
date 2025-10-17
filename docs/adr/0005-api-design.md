@@ -103,7 +103,7 @@ Chosen option: "AuthZEN protocol with Gin framework", because AuthZEN provides a
 1. **Performance**: One of the fastest Go web frameworks
    - 40x faster than Martini
    - Similar to net/http raw performance
-   
+
 2. **Middleware support**: Easy to add cross-cutting concerns
    ```go
    r.Use(LoggingMiddleware())
@@ -155,7 +155,7 @@ func RegisterAPIRoutes(r *gin.Engine, ctx *api.ServerContext) {
             c.JSON(400, gin.H{"error": "invalid request"})
             return
         }
-        
+
         decision, err := evaluateTrust(ctx, &req)
         if err != nil {
             c.JSON(500, gin.H{
@@ -166,10 +166,10 @@ func RegisterAPIRoutes(r *gin.Engine, ctx *api.ServerContext) {
             })
             return
         }
-        
+
         c.JSON(200, decision)
     })
-    
+
     // Health endpoints
     r.GET("/health", healthHandler(ctx))
     r.GET("/ready", readinessHandler(ctx))
@@ -258,12 +258,12 @@ This provides:
 ```go
 func TestDecisionEndpoint(t *testing.T) {
     r := setupRouter()
-    
+
     req := httptest.NewRequest("POST", "/authzen/decision", body)
     w := httptest.NewRecorder()
-    
+
     r.ServeHTTP(w, req)
-    
+
     assert.Equal(t, 200, w.Code)
     // Assert response
 }

@@ -82,7 +82,7 @@ func HealthHandler(c *gin.Context) {
 func ReadinessHandler(ctx *ServerContext) gin.HandlerFunc {
     return func(c *gin.Context) {
         tslCount := ctx.GetTSLCount()
-        
+
         if tslCount == 0 {
             c.JSON(503, gin.H{
                 "status": "not ready",
@@ -90,7 +90,7 @@ func ReadinessHandler(ctx *ServerContext) gin.HandlerFunc {
             })
             return
         }
-        
+
         c.JSON(200, gin.H{
             "status": "ready",
             "tsl_count": tslCount,
@@ -166,24 +166,24 @@ api_requests_total{method="GET",endpoint="/health",status="200"} 987
 ```go
 type Metrics struct {
     registry *prometheus.Registry
-    
+
     // Pipeline metrics
     pipelineExecutionDuration prometheus.Histogram
     pipelineExecutionTotal    *prometheus.CounterVec
     pipelineTSLCount          prometheus.Gauge
-    
+
     // API metrics
     apiRequestsTotal    *prometheus.CounterVec
     apiRequestDuration  *prometheus.HistogramVec
     apiRequestsInFlight prometheus.Gauge
-    
+
     // Error metrics
     errorsTotal *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
     registry := prometheus.NewRegistry()
-    
+
     m := &Metrics{
         registry: registry,
         pipelineExecutionDuration: prometheus.NewHistogram(
@@ -195,11 +195,11 @@ func NewMetrics() *Metrics {
         ),
         // ... other metrics
     }
-    
+
     // Register all metrics
     registry.MustRegister(m.pipelineExecutionDuration)
     // ...
-    
+
     return m
 }
 ```
@@ -214,21 +214,21 @@ func (m *Metrics) MetricsMiddleware() gin.HandlerFunc {
             c.Next()
             return
         }
-        
+
         start := time.Now()
         m.apiRequestsInFlight.Inc()
-        
+
         c.Next()
-        
+
         duration := time.Since(start).Seconds()
         m.apiRequestsInFlight.Dec()
-        
+
         m.apiRequestsTotal.WithLabelValues(
             c.Request.Method,
             c.FullPath(),
             strconv.Itoa(c.Writer.Status()),
         ).Inc()
-        
+
         m.apiRequestDuration.WithLabelValues(
             c.Request.Method,
             c.FullPath(),
@@ -291,13 +291,13 @@ groups:
           rate(errors_total[5m]) > 10
         annotations:
           summary: "High error rate in go-trust"
-          
+
       - alert: PipelineFailures
         expr: |
           rate(pipeline_execution_total{result="failure"}[5m]) > 0.1
         annotations:
           summary: "Pipeline failures detected"
-          
+
       - alert: HighLatency
         expr: |
           histogram_quantile(0.95,
@@ -316,7 +316,7 @@ Example PromQL queries:
 rate(api_requests_total[5m])
 
 # 95th percentile latency
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(api_request_duration_seconds_bucket[5m])
 )
 
@@ -343,16 +343,16 @@ func TestMetricsMiddleware(t *testing.T) {
     metrics := NewMetrics()
     router := gin.New()
     router.Use(metrics.MetricsMiddleware())
-    
+
     router.GET("/test", func(c *gin.Context) {
         c.String(200, "ok")
     })
-    
+
     // Make request
     req := httptest.NewRequest("GET", "/test", nil)
     w := httptest.NewRecorder()
     router.ServeHTTP(w, req)
-    
+
     // Check metrics
     assert.Equal(t, 200, w.Code)
     // Verify counter incremented

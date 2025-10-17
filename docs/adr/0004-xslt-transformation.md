@@ -92,7 +92,7 @@ func (c *Cache) Get(path string) (*Stylesheet, error) {
         return style, nil
     }
     c.mu.RUnlock()
-    
+
     // Load and cache
     c.mu.Lock()
     defer c.mu.Unlock()

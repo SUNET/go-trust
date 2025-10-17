@@ -44,7 +44,7 @@ This project follows standard open source community guidelines. Please be respec
    ```bash
    make setup
    ```
-   
+
    This will:
    - Install development tools (linters, formatters)
    - Set up Git pre-commit hooks
@@ -228,7 +228,7 @@ func TestMyFunction(t *testing.T) {
             wantErr: true,
         },
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             got, err := MyFunction(tt.input)

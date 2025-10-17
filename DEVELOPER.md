@@ -176,7 +176,7 @@ func TestMyFunction_WithValidInput(t *testing.T) {
         {"valid", "test", "TEST", false},
         {"error", "!", "", true},
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             got, err := MyFunction(tt.input)

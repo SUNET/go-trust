@@ -54,27 +54,27 @@ Chosen option: "Worker pool with dynamic sizing based on CPU count (up to 8 work
 ```go
 func ProcessTSLsConcurrently(tsls []*TSL, transform func(*TSL) error) error {
     numWorkers := min(runtime.NumCPU(), 8)
-    
+
     jobs := make(chan *TSL, len(tsls))
     results := make(chan error, len(tsls))
-    
+
     // Start workers
     var wg sync.WaitGroup
     for i := 0; i < numWorkers; i++ {
         wg.Add(1)
         go worker(jobs, results, transform, &wg)
     }
-    
+
     // Send jobs
     for _, tsl := range tsls {
         jobs <- tsl
     }
     close(jobs)
-    
+
     // Wait for completion
     wg.Wait()
     close(results)
-    
+
     // Collect errors
     var errs []error
     for err := range results {
@@ -82,7 +82,7 @@ func ProcessTSLsConcurrently(tsls []*TSL, transform func(*TSL) error) error {
             errs = append(errs, err)
         }
     }
-    
+
     if len(errs) > 0 {
         return fmt.Errorf("processing errors: %v", errs)
     }
@@ -116,7 +116,7 @@ func ProcessTSLsConcurrently(tsls []*TSL, transform func(*TSL) error) error {
 Benchmarked on 8-core system:
 
 - **1 TSL**: ~15ms (no speedup, overhead minimal)
-- **20 TSLs**: 
+- **20 TSLs**:
   - Sequential: ~600ms
   - Concurrent (8 workers): ~300ms
   - **Speedup: 2x**

@@ -757,7 +757,7 @@ The health endpoints are designed for Kubernetes probes:
 - **Liveness probe** (`/healthz`): Checks if the service is running
   - Returns 200 OK if the service is alive
   - Should trigger container restart on failure
-  
+
 - **Readiness probe** (`/readiness`): Checks if the service is ready to accept traffic
   - Returns 200 OK when TSLs are loaded and service is ready
   - Returns 503 Service Unavailable during startup or when pipeline fails
@@ -917,7 +917,7 @@ Logging statements in pipeline steps:
     - "Processing TSL files"
   - count=5
   - source=example.com
-  
+
   - log:
   - level=debug "Detailed debugging information"
   - tsl_id=SETSL123
@@ -952,16 +952,16 @@ import "github.com/SUNET/go-trust/pkg/logging"
 
 func MyFunction() {
     logger := logging.DefaultLogger()
-    
+
     // Simple logging
     logger.Info("Processing started")
-    
+
     // With structured fields
-    logger.Debug("Validation details", 
+    logger.Debug("Validation details",
         logging.F("certCount", 5),
         logging.F("valid", true),
     )
-    
+
     // With context
     ctx := context.Background()
     ctxLogger := logger.WithContext(ctx)

@@ -123,12 +123,12 @@ func ProcessTSL(url string) error {
     if err != nil {
         return fmt.Errorf("failed to fetch TSL from %s: %w", url, err)
     }
-    
+
     tsl, err := parseTSL(data)
     if err != nil {
         return fmt.Errorf("failed to parse TSL from %s: %w", url, err)
     }
-    
+
     return nil
 }
 ```
@@ -178,7 +178,7 @@ func handleError(c *gin.Context, err error) {
             "id": generateErrorID(),
         },
     }
-    
+
     var certErr *CertificateError
     if errors.As(err, &certErr) {
         response.Context["reason_admin"] = map[string]string{
@@ -190,7 +190,7 @@ func handleError(c *gin.Context, err error) {
         c.JSON(200, response)
         return
     }
-    
+
     // Generic error
     response.Context["reason_admin"] = map[string]string{
         "error": err.Error(),
@@ -293,9 +293,9 @@ if err := initializeLogging(); err != nil {
 ```go
 func TestLoadTSL_NetworkError(t *testing.T) {
     _, err := LoadTSL("http://invalid.example.com/tsl.xml")
-    
+
     require.Error(t, err)
-    
+
     var pipelineErr *PipelineError
     require.True(t, errors.As(err, &pipelineErr))
     assert.Equal(t, "load", pipelineErr.Step)
@@ -325,7 +325,7 @@ Record errors by type:
 ```go
 func RecordError(err error) {
     errorType := "unknown"
-    
+
     switch err.(type) {
     case *PipelineError:
         errorType = "pipeline"
@@ -334,7 +334,7 @@ func RecordError(err error) {
     case *CertificateError:
         errorType = "certificate"
     }
-    
+
     errorsTotal.WithLabelValues(errorType).Inc()
 }
 ```
