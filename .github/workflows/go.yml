@@ -16,6 +16,8 @@ jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - uses: actions/checkout@v3
@@ -91,14 +93,17 @@ jobs:
 
         # Save generated badges to temp location
         mkdir -p /tmp/badges
-        cp .badges/main/*.svg /tmp/badges/ || true
+        cp .badges/main/*.svg /tmp/badges/ 2>/dev/null || true
 
-        # Clean up any uncommitted changes and untracked badge files
-        git reset --hard HEAD
-        rm -rf .badges
+        # Save current branch
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+        # Clean up any changes (including README.md modifications by badge action)
+        git checkout -- .
+        git clean -fd
 
         # Fetch or create badges branch
-        git fetch origin badges:badges || git branch badges
+        git fetch origin badges:badges 2>/dev/null || git branch badges
         git checkout badges
 
         # Copy the generated badge files from temp
