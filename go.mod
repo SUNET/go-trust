@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
-	github.com/SUNET/g119612 v0.0.0-20251008163959-71c7cad28e1c
+	github.com/SUNET/g119612 v0.0.0-20251017074852-ae6e0d1d1c93
 	github.com/ThalesGroup/crypto11 v1.6.0
 	github.com/beevik/etree v1.5.1
 	github.com/gin-gonic/gin v1.11.0
