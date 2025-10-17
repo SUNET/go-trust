@@ -513,4 +513,3 @@ func GenerateTSL(pl *Pipeline, ctx *Context, args ...string) (*Context, error) {
 //   - max-depth:3
 //   - load: [http://example.com/tsl.xml]
 //   - load: [/path/to/local/tsl.xml]
-

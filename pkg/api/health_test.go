@@ -20,12 +20,12 @@ import (
 func createTestContext(tslCount int, lastProcessed time.Time) *ServerContext {
 	pCtx := pipeline.NewContext()
 	pCtx.TSLs = utils.NewStack[*etsi119612.TSL]()
-	
+
 	// Add dummy TSLs
 	for i := 0; i < tslCount; i++ {
 		pCtx.TSLs.Push(&etsi119612.TSL{})
 	}
-	
+
 	return &ServerContext{
 		PipelineContext: pCtx,
 		LastProcessed:   lastProcessed,
@@ -249,7 +249,7 @@ func TestReadyEndpoint_Concurrent(t *testing.T) {
 func TestHealthResponse_JSONFormat(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2024-01-15T10:30:00Z")
 	require.NoError(t, err)
-	
+
 	response := HealthResponse{
 		Status:    "ok",
 		Timestamp: ts,
@@ -265,7 +265,7 @@ func TestHealthResponse_JSONFormat(t *testing.T) {
 func TestReadinessResponse_JSONFormat(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2024-01-15T10:30:00Z")
 	require.NoError(t, err)
-	
+
 	response := ReadinessResponse{
 		Status:        "ready",
 		Timestamp:     ts,

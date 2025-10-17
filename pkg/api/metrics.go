@@ -36,10 +36,10 @@ type Metrics struct {
 // NewMetrics creates and registers all Prometheus metrics
 func NewMetrics() *Metrics {
 	registry := prometheus.NewRegistry()
-	
+
 	m := &Metrics{
 		registry: registry,
-		
+
 		// Pipeline metrics
 		PipelineExecutionDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "go_trust_pipeline_execution_duration_seconds",

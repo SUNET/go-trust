@@ -183,7 +183,7 @@ func TestMetricsEndpoint_PrometheusFormat(t *testing.T) {
 	r := gin.New()
 
 	RegisterMetricsEndpoint(r, m)
-	
+
 	// Add a test route to generate API metrics
 	r.GET("/test", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -194,7 +194,7 @@ func TestMetricsEndpoint_PrometheusFormat(t *testing.T) {
 	m.RecordTSLProcessing(100 * time.Millisecond)
 	m.RecordError("test_error", "test_operation")
 	m.RecordCertValidation(10*time.Millisecond, true)
-	
+
 	// Make an API request to generate API metrics
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
@@ -282,12 +282,12 @@ func TestMetricsEndpoint_ContentType(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	// Prometheus metrics should have text/plain content type
 	contentType := w.Header().Get("Content-Type")
-	assert.True(t, 
-		strings.Contains(contentType, "text/plain") || 
-		strings.Contains(contentType, "application/openmetrics-text"),
+	assert.True(t,
+		strings.Contains(contentType, "text/plain") ||
+			strings.Contains(contentType, "application/openmetrics-text"),
 		"Content-Type should be text/plain or application/openmetrics-text, got: %s", contentType)
 }
 

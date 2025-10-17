@@ -342,10 +342,10 @@ func main() {
 
 	// Gin API server
 	r := gin.Default()
-	
+
 	// Register metrics endpoint first (includes middleware)
 	api.RegisterMetricsEndpoint(r, metrics)
-	
+
 	// Register other API routes
 	api.RegisterAPIRoutes(r, serverCtx)
 	api.RegisterHealthEndpoints(r, serverCtx)
