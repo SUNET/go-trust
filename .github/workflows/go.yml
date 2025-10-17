@@ -79,13 +79,17 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
+        # Save generated badges to temp location
+        mkdir -p /tmp/badges
+        cp .badges/main/*.svg /tmp/badges/ || true
+        
         # Fetch or create badges branch
         git fetch origin badges:badges || git branch badges
         git checkout badges
         
-        # Copy the generated badge files from main working directory
+        # Copy the generated badge files from temp
         mkdir -p .badges/main
-        git checkout main -- .badges/main/ || true
+        cp /tmp/badges/*.svg .badges/main/ || true
         
         # Add and commit
         git add .badges/main/
