@@ -93,6 +93,10 @@ jobs:
         mkdir -p /tmp/badges
         cp .badges/main/*.svg /tmp/badges/ || true
 
+        # Clean up any uncommitted changes and untracked badge files
+        git reset --hard HEAD
+        rm -rf .badges
+
         # Fetch or create badges branch
         git fetch origin badges:badges || git branch badges
         git checkout badges
