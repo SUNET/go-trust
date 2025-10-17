@@ -18,13 +18,18 @@ import (
 
 // TestMain sets up and tears down test environment
 func TestMain(m *testing.M) {
+	var code int
+	
 	// Check if integration tests are enabled
 	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
-		fmt.Println("Skipping main.go integration tests. Set RUN_INTEGRATION_TESTS=1 to enable.")
-		os.Exit(0)
+		fmt.Println("Skipping integration tests. Set RUN_INTEGRATION_TESTS=1 to enable.")
+		fmt.Println("Running unit tests only...")
+		// Run tests without building the binary
+		code = m.Run()
+		os.Exit(code)
 	}
 
-	// Build the binary for testing
+	// Integration test setup: Build the binary for testing
 	fmt.Println("Building go-trust binary for integration tests...")
 	cmd := exec.Command("go", "build", "-o", "./gt-test", ".")
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -33,12 +38,20 @@ func TestMain(m *testing.M) {
 	}
 
 	// Run tests
-	code := m.Run()
+	code = m.Run()
 
 	// Cleanup
 	os.Remove("./gt-test")
 
 	os.Exit(code)
+}
+
+// requireIntegrationBinary skips the test if the integration test binary doesn't exist
+func requireIntegrationBinary(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
+		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
+	}
 }
 
 // serverProcess manages a running server instance
@@ -52,6 +65,7 @@ type serverProcess struct {
 // startServer starts the API server in a separate process
 func startServer(t *testing.T, pipelineFile string, port string, testMode bool) *serverProcess {
 	t.Helper()
+	requireIntegrationBinary(t)
 
 	// Get absolute path to pipeline file
 	absPath, err := filepath.Abs(pipelineFile)
@@ -153,6 +167,11 @@ func (sp *serverProcess) shutdown(t *testing.T) {
 
 // TestVersionFlag tests the --version flag
 func TestVersionFlag(t *testing.T) {
+	// Skip if binary doesn't exist (integration tests not enabled)
+	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
+		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
+	}
+	
 	cmd := exec.Command("./gt-test", "--version")
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "--version should exit successfully")
@@ -164,6 +183,11 @@ func TestVersionFlag(t *testing.T) {
 
 // TestHelpFlag tests the --help flag
 func TestHelpFlag(t *testing.T) {
+	// Skip if binary doesn't exist (integration tests not enabled)
+	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
+		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
+	}
+	
 	cmd := exec.Command("./gt-test", "--help")
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "--help should exit successfully")
@@ -178,6 +202,11 @@ func TestHelpFlag(t *testing.T) {
 
 // TestMissingPipelineFile tests behavior when no pipeline file is provided
 func TestMissingPipelineFile(t *testing.T) {
+	// Skip if binary doesn't exist (integration tests not enabled)
+	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
+		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
+	}
+	
 	cmd := exec.Command("./gt-test")
 	output, err := cmd.CombinedOutput()
 	require.Error(t, err, "Should fail when pipeline file is missing")
@@ -190,6 +219,11 @@ func TestMissingPipelineFile(t *testing.T) {
 
 // TestInvalidPipelineFile tests behavior with a non-existent pipeline file
 func TestInvalidPipelineFile(t *testing.T) {
+	// Skip if binary doesn't exist (integration tests not enabled)
+	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
+		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
+	}
+	
 	cmd := exec.Command("./gt-test", "nonexistent-pipeline.yaml")
 	output, err := cmd.CombinedOutput()
 	require.Error(t, err, "Should fail with invalid pipeline file")
@@ -201,6 +235,11 @@ func TestInvalidPipelineFile(t *testing.T) {
 
 // TestNoServerMode tests the --no-server flag for one-shot pipeline execution
 func TestNoServerMode(t *testing.T) {
+	// Skip if binary doesn't exist (integration tests not enabled)
+	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
+		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
+	}
+	
 	// Create a simple test pipeline
 	tempPipeline := createTempPipeline(t, `
 - log:
@@ -224,6 +263,8 @@ func TestNoServerMode(t *testing.T) {
 
 // TestNoServerModeWithLogging tests --no-server with different log levels
 func TestNoServerModeWithLogging(t *testing.T) {
+	requireIntegrationBinary(t)
+	
 	tempPipeline := createTempPipeline(t, `
 - log:
     - "Testing with debug logging"
@@ -242,6 +283,8 @@ func TestNoServerModeWithLogging(t *testing.T) {
 
 // TestNoServerModeInvalidPipeline tests --no-server with an invalid pipeline
 func TestNoServerModeInvalidPipeline(t *testing.T) {
+	requireIntegrationBinary(t)
+	
 	tempPipeline := createTempPipeline(t, `
 - invalid_step:
     - "This step does not exist"
@@ -261,6 +304,8 @@ func TestNoServerModeInvalidPipeline(t *testing.T) {
 // TestBasicPipelineExecution tests running a basic pipeline without API calls
 // This test uses a simple pipeline that doesn't start a listener
 func TestBasicPipelineExecution(t *testing.T) {
+	requireIntegrationBinary(t)
+	
 	// Skip if the example file doesn't exist or isn't suitable for testing
 	pipelineFile := "../example/basic-usage.yaml"
 	if _, err := os.Stat(pipelineFile); os.IsNotExist(err) {
@@ -619,6 +664,8 @@ func createTempPipeline(t *testing.T, content string) string {
 
 // TestConfigFileIntegration verifies that config files are loaded correctly
 func TestConfigFileIntegration(t *testing.T) {
+	requireIntegrationBinary(t)
+	
 	// Create a temporary config file
 	configContent := `
 server:
@@ -666,6 +713,8 @@ logging:
 
 // TestConfigPrecedence verifies the configuration precedence order
 func TestConfigPrecedence(t *testing.T) {
+	requireIntegrationBinary(t)
+	
 	// Create a config file with specific values
 	configContent := `
 server:
@@ -716,6 +765,8 @@ logging:
 
 // TestEnvVarConfiguration verifies environment variable configuration
 func TestEnvVarConfiguration(t *testing.T) {
+	requireIntegrationBinary(t)
+	
 	// Create a test pipeline
 	pipelineContent := `
 - echo:
