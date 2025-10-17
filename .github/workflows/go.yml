@@ -23,7 +23,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.25'
+        go-version-file: 'go.mod'
         cache: true
       
     - name: Verify dependencies
@@ -78,14 +78,19 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git fetch origin badges || git branch badges
+        
+        # Fetch or create badges branch
+        git fetch origin badges:badges || git branch badges
         git checkout badges
+        
+        # Copy the generated badge files from main working directory
         mkdir -p .badges/main
-        cp -f .badges/main/coverage.svg .badges/main/coverage.svg || true
-        cp -f .badges/main/golang.svg .badges/main/golang.svg || true
-        git add .badges/main/coverage.svg .badges/main/golang.svg
-        git commit -m "chore: Update badges"
-        git push origin badges --force
+        git checkout main -- .badges/main/ || true
+        
+        # Add and commit
+        git add .badges/main/
+        git diff --staged --quiet || git commit -m "chore: Update badges [skip ci]"
+        git push origin badges
 
   lint:
     name: Lint
@@ -97,7 +102,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.25'
+        go-version-file: 'go.mod'
         cache: true
       
     - name: golangci-lint
