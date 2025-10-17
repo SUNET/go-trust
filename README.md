@@ -24,12 +24,30 @@ Go-Trust is a local trust engine that provides trust decisions based on ETSI TS 
 
 ## Features
 
+### Core Capabilities
+
 - **AuthZEN Integration**: Policy decision point for trust evaluation
 - **TSL Management**: Process and validate ETSI TS 119612 Trust Status Lists
 - **Certificate Validation**: Evaluate X509 certificates against trusted services
 - **Pipeline Processing**: Flexible TSL processing with configurable steps
 - **XML Publishing**: Serialize TSLs to XML for distribution
 - **XML Signing**: Sign XML documents using file-based keys or PKCS#11 hardware security modules
+
+### Production-Ready Features
+
+- **Health Checks**: Kubernetes-compatible liveness and readiness endpoints
+- **Metrics**: Comprehensive Prometheus metrics for observability
+- **Performance**: Concurrent TSL processing with XSLT caching (2-3x speedup)
+- **Security**: Input validation, rate limiting, and path traversal protection
+- **Configuration**: Flexible YAML-based config with environment variable support
+- **Developer Tools**: Full VS Code integration, pre-commit hooks, and comprehensive testing
+
+### Quality & Reliability
+
+- **Test Coverage**: >80% overall, >85% for critical packages (api, pipeline, dsig)
+- **Benchmarks**: Performance validated with comprehensive benchmark suite
+- **Linting**: Multiple linters (golangci-lint, gosec, staticcheck)
+- **CI/CD**: Automated testing, coverage tracking, and security scanning
 
 ## Installation
 
@@ -310,9 +328,66 @@ See [example/config.yaml](./example/config.yaml) for a complete configuration ex
 
 The service exposes several HTTP endpoints:
 
-- **GET /status**: Check service health status
-- **GET /info**: Get information about loaded TSLs
+#### Health & Monitoring
+
+- **GET /health** or **/healthz**: Liveness probe (always returns 200 OK when service is running)
+- **GET /ready** or **/readiness**: Readiness probe (returns 200 when TSLs loaded, 503 otherwise)
+- **GET /metrics**: Prometheus metrics endpoint for monitoring and observability
+
+#### Service Information
+
+- **GET /status**: Check service health status and loaded TSL count
+- **GET /info**: Get detailed information about loaded TSLs
+
+#### Trust Decisions
+
 - **POST /authzen/decision**: Evaluate trust decisions for X509 certificates
+
+The health endpoints follow Kubernetes best practices:
+- **Liveness** checks if the service is alive (restarts unhealthy containers)
+- **Readiness** checks if the service is ready to accept traffic (removes from load balancer if not)
+
+See the [Deployment Guide](#deployment) for Kubernetes integration examples.
+
+#### Prometheus Metrics
+
+The `/metrics` endpoint exposes comprehensive operational metrics:
+
+**Pipeline Metrics:**
+- `pipeline_execution_duration_seconds` - Time to complete pipeline execution
+- `pipeline_execution_total` - Total pipeline executions (with success/failure labels)
+- `pipeline_execution_errors_total` - Pipeline execution errors by type
+- `pipeline_tsl_count` - Number of TSLs in current pipeline
+- `pipeline_tsl_processing_duration_seconds` - TSL processing time histogram
+
+**API Metrics:**
+- `api_requests_total` - HTTP requests by method, endpoint, and status code
+- `api_request_duration_seconds` - Request latency histogram
+- `api_requests_in_flight` - Current number of active requests
+
+**Error Metrics:**
+- `errors_total` - Application errors by type and operation
+
+**Certificate Validation Metrics:**
+- `cert_validation_total` - Certificate validations by result (valid/invalid/error)
+- `cert_validation_duration_seconds` - Certificate validation latency
+
+Example Prometheus queries:
+```promql
+# Request rate by endpoint
+rate(api_requests_total[5m])
+
+# 95th percentile latency
+histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m]))
+
+# Pipeline success rate
+rate(pipeline_execution_total{result="success"}[5m]) / rate(pipeline_execution_total[5m])
+
+# Certificate validation error rate
+rate(cert_validation_total{result="error"}[5m])
+```
+
+#### AuthZEN Decision API
 
 Example AuthZEN decision request:
 
@@ -457,18 +532,240 @@ Available command-line options:
 - Access to ETSI TS 119612 TSLs or sample data
 - Make for build automation
 
+### Quick Start
+
+For detailed developer documentation, see [DEVELOPER.md](DEVELOPER.md).
+
+```bash
+# Clone the repository
+git clone https://github.com/SUNET/go-trust.git
+cd go-trust
+
+# Set up development environment
+make setup
+
+# Run tests
+make test
+
+# Build binary
+make build
+```
+
 ### Building from Source
 
 ```bash
 # Build binary
 make build
 
-# Run tests
+# Run tests with coverage
 make test
 
 # Check code coverage
 make coverage
+
+# Run linters
+make lint
+
+# Run benchmarks
+make bench
 ```
+
+### Available Make Targets
+
+Run `make help` to see all available targets:
+
+```bash
+make help
+```
+
+Key targets:
+- `make all` - Run all checks and build (CI pipeline)
+- `make test` - Run tests with race detection
+- `make coverage` - Generate coverage report
+- `make lint` - Run all linters
+- `make fmt` - Format code
+- `make quick` - Quick pre-commit checks (fmt + vet)
+- `make bench` - Run benchmarks
+- `make clean` - Remove build artifacts
+
+## Deployment
+
+### Docker
+
+Build and run using Docker:
+
+```bash
+# Build Docker image
+docker build -t go-trust:latest .
+
+# Run container
+docker run -d \
+  -p 6001:6001 \
+  -v $(pwd)/pipeline.yaml:/app/pipeline.yaml \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  go-trust:latest --config /app/config.yaml /app/pipeline.yaml
+```
+
+### Kubernetes
+
+Deploy to Kubernetes with health checks and metrics:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-trust
+  labels:
+    app: go-trust
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: go-trust
+  template:
+    metadata:
+      labels:
+        app: go-trust
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6001"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: go-trust
+        image: go-trust:latest
+        ports:
+        - name: http
+          containerPort: 6001
+          protocol: TCP
+        env:
+        - name: GT_HOST
+          value: "0.0.0.0"
+        - name: GT_PORT
+          value: "6001"
+        - name: GT_LOG_LEVEL
+          value: "info"
+        - name: GT_LOG_FORMAT
+          value: "json"
+        - name: GT_RATE_LIMIT_RPS
+          value: "100"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+        - name: pipeline
+          mountPath: /app/pipeline.yaml
+          subPath: pipeline.yaml
+      volumes:
+      - name: config
+        configMap:
+          name: go-trust-config
+      - name: pipeline
+        configMap:
+          name: go-trust-pipeline
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-trust
+  labels:
+    app: go-trust
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6001
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: go-trust
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: go-trust-config
+data:
+  config.yaml: |
+    server:
+      host: "0.0.0.0"
+      port: "6001"
+      frequency: "5m"
+    logging:
+      level: "info"
+      format: "json"
+      output: "stdout"
+    security:
+      rate_limit_rps: 100
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: go-trust-pipeline
+data:
+  pipeline.yaml: |
+    # Your pipeline configuration here
+```
+
+### Prometheus Monitoring
+
+Create a ServiceMonitor for Prometheus Operator:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: go-trust
+  labels:
+    app: go-trust
+spec:
+  selector:
+    matchLabels:
+      app: go-trust
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+```
+
+### Health Check Configuration
+
+The health endpoints are designed for Kubernetes probes:
+
+- **Liveness probe** (`/healthz`): Checks if the service is running
+  - Returns 200 OK if the service is alive
+  - Should trigger container restart on failure
+  
+- **Readiness probe** (`/readiness`): Checks if the service is ready to accept traffic
+  - Returns 200 OK when TSLs are loaded and service is ready
+  - Returns 503 Service Unavailable during startup or when pipeline fails
+  - Should remove pod from load balancer on failure
+
+Recommended probe configuration:
+- **Liveness**: `initialDelaySeconds: 10`, `periodSeconds: 30`, `failureThreshold: 3`
+- **Readiness**: `initialDelaySeconds: 5`, `periodSeconds: 10`, `failureThreshold: 3`
 
 ### Project Structure
 
@@ -496,31 +793,48 @@ This project uses GitHub Actions for continuous integration and delivery:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
+
+- Setting up your development environment
+- Code style and standards
+- Testing requirements
+- Submitting pull requests
+- Release process
+
+Quick contribution workflow:
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Run tests and linters (`make quick && make test`)
+4. Commit your changes (`git commit -m 'feat: Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+For detailed development documentation, see [DEVELOPER.md](DEVELOPER.md).
 
 ### Testing
 
-Before submitting a pull request, please ensure:
+Go-Trust has comprehensive test coverage (>80% overall, >85% for critical packages).
+
+Before submitting a pull request, ensure:
 
 ```bash
-# All tests pass
+# Run all tests
 make test
 
-# Code coverage is maintained or improved
+# Check coverage
 make coverage
 
-# Code follows project style guidelines
-go fmt ./...
-go vet ./...
+# Run linters
+make lint
+
+# Quick pre-commit checks
+make quick
 ```
 
-The CI pipeline will automatically run these checks when you submit a pull request. All checks must pass before a PR can be merged.
+The CI pipeline automatically runs these checks on all pull requests. All checks must pass before merging.
+
+For detailed testing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md#testing).
 
 #### PKCS#11 Testing with SoftHSM
 
