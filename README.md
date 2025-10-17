@@ -22,6 +22,8 @@
 
 Go-Trust is a local trust engine that provides trust decisions based on ETSI TS 119612 Trust Status Lists (TSLs). It allows clients to abstract trust decisions through an AuthZEN policy decision point (PDP). The service evaluates trust in subjects identified by X509 certificates using a set of TSLs.
 
+Go-Trust is not meant to be used cross trust boundaries.
+
 ## Features
 
 ### Core Capabilities
