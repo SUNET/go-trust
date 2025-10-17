@@ -150,6 +150,29 @@ The validation layer is automatically applied to:
 - Certificate and key file paths for signing
 - Configuration file paths
 
+#### API Rate Limiting
+
+Go-Trust includes per-IP rate limiting to prevent API abuse and ensure fair usage:
+
+- **Token bucket algorithm**: Uses `golang.org/x/time/rate` for smooth rate limiting
+- **Per-IP tracking**: Each client IP address has its own rate limit
+- **Configurable limits**: Set requests per second (RPS) via configuration or environment variables
+- **Automatic burst handling**: Allows brief bursts above the sustained rate limit
+- **429 responses**: Clients exceeding limits receive standard HTTP 429 (Too Many Requests)
+
+Configuration options:
+```yaml
+security:
+  rate_limit_rps: 100  # Maximum requests per second per IP
+```
+
+Or via environment variable:
+```bash
+GT_RATE_LIMIT_RPS=100 ./gt pipeline.yaml
+```
+
+Rate limiting is applied to all API endpoints when `rate_limit_rps > 0`. Set to 0 to disable rate limiting entirely (not recommended for production).
+
 ## Digital Signatures
 
 Go-Trust includes a dedicated package for XML digital signatures in [pkg/dsig](./pkg/dsig/). This package supports:

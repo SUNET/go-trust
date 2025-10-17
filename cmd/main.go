@@ -309,6 +309,19 @@ func main() {
 	serverCtx := api.NewServerContext(logger)
 	serverCtx.PipelineContext = pipeline.NewContext()
 
+	// Configure rate limiting if enabled
+	if cfg.Security.RateLimitRPS > 0 {
+		// Use burst size of 10% of RPS, minimum of 5
+		burst := cfg.Security.RateLimitRPS / 10
+		if burst < 5 {
+			burst = 5
+		}
+		serverCtx.RateLimiter = api.NewRateLimiter(cfg.Security.RateLimitRPS, burst)
+		logger.Info("Rate limiting configured",
+			logging.F("rps", cfg.Security.RateLimitRPS),
+			logging.F("burst", burst))
+	}
+
 	// Start background updater
 	api.StartBackgroundUpdater(pl, serverCtx, cfg.Server.Frequency)
 

@@ -158,7 +158,17 @@ func NewServerContext(logger logging.Logger) *ServerContext {
 //
 //	This endpoint processes AuthZEN EvaluationRequest objects containing x5c certificate
 //	chains and verifies them against the trusted certificates in the pipeline context.
+//
+// If a RateLimiter is configured in the ServerContext, it will be applied to all routes.
 func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
+	// Apply rate limiting middleware if configured
+	if serverCtx.RateLimiter != nil {
+		r.Use(serverCtx.RateLimiter.Middleware())
+		serverCtx.Logger.Info("Rate limiting enabled",
+			logging.F("rps", serverCtx.RateLimiter.rps),
+			logging.F("burst", serverCtx.RateLimiter.burst))
+	}
+
 	// Status endpoint returns basic server status information
 	// including the count of TSLs and when the pipeline was last processed
 	r.GET("/status", func(c *gin.Context) {

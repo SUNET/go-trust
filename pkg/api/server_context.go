@@ -20,6 +20,7 @@ type ServerContext struct {
 	PipelineContext *pipeline.Context // The current pipeline context with TSLs and certificate pool
 	LastProcessed   time.Time         // Timestamp when the pipeline was last processed
 	Logger          logging.Logger    // Logger for API operations (never nil)
+	RateLimiter     *RateLimiter      // Rate limiter for API endpoints (optional)
 }
 
 // Lock locks the ServerContext for writing.

@@ -151,8 +151,8 @@ func ValidateConfigPath(path string) error {
 	}
 
 	// Additional checks for config files
-	if !strings.HasSuffix(strings.ToLower(path), ".yaml") && 
-	   !strings.HasSuffix(strings.ToLower(path), ".yml") {
+	if !strings.HasSuffix(strings.ToLower(path), ".yaml") &&
+		!strings.HasSuffix(strings.ToLower(path), ".yml") {
 		return fmt.Errorf("config file must have .yaml or .yml extension")
 	}
 

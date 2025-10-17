@@ -494,3 +494,69 @@ func TestParseX5C_Errors(t *testing.T) {
 		t.Errorf("Expected empty result for missing x5c, got: %v, %v", certs, err)
 	}
 }
+
+// TestRateLimiting_Integration verifies that rate limiting is applied when configured
+func TestRateLimiting_Integration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create a server context with rate limiting enabled (strict limits for testing)
+	logger := logging.NewLogger(logging.InfoLevel)
+	serverCtx := NewServerContext(logger)
+	serverCtx.PipelineContext = pipeline.NewContext()
+	serverCtx.RateLimiter = NewRateLimiter(2, 2) // 2 req/sec, burst of 2
+
+	// Create router and register routes
+	router := gin.New()
+	RegisterAPIRoutes(router, serverCtx)
+
+	// Make requests from the same IP
+	ip := "192.168.1.100"
+
+	// First 2 requests should succeed (within burst)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/status", nil)
+		req.RemoteAddr = ip + ":1234"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code, "Request %d should succeed", i+1)
+	}
+
+	// Third request should be rate limited
+	req := httptest.NewRequest("GET", "/status", nil)
+	req.RemoteAddr = ip + ":1234"
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 429, w.Code, "Request should be rate limited")
+	assert.Contains(t, w.Body.String(), "rate limit exceeded")
+
+	// Request from different IP should still work
+	req2 := httptest.NewRequest("GET", "/status", nil)
+	req2.RemoteAddr = "192.168.1.101:1234"
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	assert.Equal(t, 200, w2.Code, "Request from different IP should succeed")
+}
+
+// TestRateLimiting_Disabled verifies that rate limiting can be disabled
+func TestRateLimiting_Disabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create a server context WITHOUT rate limiting
+	logger := logging.NewLogger(logging.InfoLevel)
+	serverCtx := NewServerContext(logger)
+	serverCtx.PipelineContext = pipeline.NewContext()
+	serverCtx.RateLimiter = nil // No rate limiter
+
+	// Create router and register routes
+	router := gin.New()
+	RegisterAPIRoutes(router, serverCtx)
+
+	// Make many requests rapidly - all should succeed
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest("GET", "/status", nil)
+		req.RemoteAddr = "192.168.1.1:1234"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code, "Request %d should succeed when rate limiting disabled", i+1)
+	}
+}
