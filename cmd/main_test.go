@@ -19,7 +19,7 @@ import (
 // TestMain sets up and tears down test environment
 func TestMain(m *testing.M) {
 	var code int
-	
+
 	// Check if integration tests are enabled
 	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
 		fmt.Println("Skipping integration tests. Set RUN_INTEGRATION_TESTS=1 to enable.")
@@ -171,7 +171,7 @@ func TestVersionFlag(t *testing.T) {
 	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
 		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
 	}
-	
+
 	cmd := exec.Command("./gt-test", "--version")
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "--version should exit successfully")
@@ -187,7 +187,7 @@ func TestHelpFlag(t *testing.T) {
 	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
 		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
 	}
-	
+
 	cmd := exec.Command("./gt-test", "--help")
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "--help should exit successfully")
@@ -206,7 +206,7 @@ func TestMissingPipelineFile(t *testing.T) {
 	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
 		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
 	}
-	
+
 	cmd := exec.Command("./gt-test")
 	output, err := cmd.CombinedOutput()
 	require.Error(t, err, "Should fail when pipeline file is missing")
@@ -223,7 +223,7 @@ func TestInvalidPipelineFile(t *testing.T) {
 	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
 		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
 	}
-	
+
 	cmd := exec.Command("./gt-test", "nonexistent-pipeline.yaml")
 	output, err := cmd.CombinedOutput()
 	require.Error(t, err, "Should fail with invalid pipeline file")
@@ -239,7 +239,7 @@ func TestNoServerMode(t *testing.T) {
 	if _, err := os.Stat("./gt-test"); os.IsNotExist(err) {
 		t.Skip("Integration test binary not built. Set RUN_INTEGRATION_TESTS=1 to enable.")
 	}
-	
+
 	// Create a simple test pipeline
 	tempPipeline := createTempPipeline(t, `
 - log:
@@ -264,7 +264,7 @@ func TestNoServerMode(t *testing.T) {
 // TestNoServerModeWithLogging tests --no-server with different log levels
 func TestNoServerModeWithLogging(t *testing.T) {
 	requireIntegrationBinary(t)
-	
+
 	tempPipeline := createTempPipeline(t, `
 - log:
     - "Testing with debug logging"
@@ -284,7 +284,7 @@ func TestNoServerModeWithLogging(t *testing.T) {
 // TestNoServerModeInvalidPipeline tests --no-server with an invalid pipeline
 func TestNoServerModeInvalidPipeline(t *testing.T) {
 	requireIntegrationBinary(t)
-	
+
 	tempPipeline := createTempPipeline(t, `
 - invalid_step:
     - "This step does not exist"
@@ -305,7 +305,7 @@ func TestNoServerModeInvalidPipeline(t *testing.T) {
 // This test uses a simple pipeline that doesn't start a listener
 func TestBasicPipelineExecution(t *testing.T) {
 	requireIntegrationBinary(t)
-	
+
 	// Skip if the example file doesn't exist or isn't suitable for testing
 	pipelineFile := "../example/basic-usage.yaml"
 	if _, err := os.Stat(pipelineFile); os.IsNotExist(err) {
@@ -665,7 +665,7 @@ func createTempPipeline(t *testing.T, content string) string {
 // TestConfigFileIntegration verifies that config files are loaded correctly
 func TestConfigFileIntegration(t *testing.T) {
 	requireIntegrationBinary(t)
-	
+
 	// Create a temporary config file
 	configContent := `
 server:
@@ -714,7 +714,7 @@ logging:
 // TestConfigPrecedence verifies the configuration precedence order
 func TestConfigPrecedence(t *testing.T) {
 	requireIntegrationBinary(t)
-	
+
 	// Create a config file with specific values
 	configContent := `
 server:
@@ -766,7 +766,7 @@ logging:
 // TestEnvVarConfiguration verifies environment variable configuration
 func TestEnvVarConfiguration(t *testing.T) {
 	requireIntegrationBinary(t)
-	
+
 	// Create a test pipeline
 	pipelineContent := `
 - echo:

@@ -165,7 +165,7 @@ func TestHexToBytes_EmptyString(t *testing.T) {
 func TestSignXML_InvalidXML(t *testing.T) {
 	// This test verifies that malformed XML is handled properly
 	// Note: We need a real signer, but we can test with invalid XML first
-	
+
 	// Create temporary cert and key files using openssl if available
 	if _, err := os.Stat("/usr/bin/openssl"); os.IsNotExist(err) {
 		t.Skip("openssl not available")
@@ -235,7 +235,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDLXB/lqQqL4xj/P9Y0x8qQi1K6
 // TestPKCS11Signer_SetKeyID tests the SetKeyID method
 func TestPKCS11Signer_SetKeyID(t *testing.T) {
 	signer := NewPKCS11Signer(nil, "testKey", "testCert")
-	
+
 	// Default should be "01"
 	assert.Equal(t, "01", signer.keyID)
 

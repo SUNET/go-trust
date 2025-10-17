@@ -133,7 +133,7 @@ func TestUsage(t *testing.T) {
 	// Verify the output contains expected sections
 	assert.Contains(t, output, "Usage:", "Output should contain Usage section")
 	assert.Contains(t, output, "<pipeline.yaml>", "Output should show pipeline file argument")
-	
+
 	// Verify all command-line options are documented
 	expectedOptions := []string{
 		"--config",
@@ -156,7 +156,7 @@ func TestUsage(t *testing.T) {
 	assert.Contains(t, output, "Options:", "Should have Options section")
 	assert.Contains(t, output, "Logging options:", "Should have Logging options section")
 	assert.Contains(t, output, "Configuration precedence", "Should have Configuration precedence section")
-	
+
 	// Verify some key descriptions
 	assert.Contains(t, output, "Run pipeline once and exit", "Should explain no-server option")
 	assert.Contains(t, output, "Show version information", "Should explain version option")
@@ -213,10 +213,10 @@ func TestUsageOutputFormat(t *testing.T) {
 func TestVersionVariable(t *testing.T) {
 	// The Version variable is set at build time with -ldflags
 	// In tests, it will have its default value
-	
+
 	// Test that Version is a string (even if empty in test context)
 	assert.IsType(t, "", Version, "Version should be a string")
-	
+
 	// In test context, Version is typically "dev"
 	// In production builds, it's set via ldflags
 	assert.NotEmpty(t, Version, "Version should not be empty")
@@ -227,9 +227,9 @@ func TestVersionVariable(t *testing.T) {
 func TestParseLogLevelConcurrency(t *testing.T) {
 	// Run parseLogLevel concurrently to verify it's thread-safe
 	levels := []string{"debug", "info", "warn", "error", "fatal", "invalid"}
-	
+
 	done := make(chan bool)
-	
+
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			for _, level := range levels {
@@ -240,12 +240,12 @@ func TestParseLogLevelConcurrency(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines
 	for i := 0; i < 10; i++ {
 		<-done
 	}
-	
+
 	t.Log("parseLogLevel is safe for concurrent use")
 }
 
