@@ -76,6 +76,13 @@
 //	                          Accepts: AuthZEN EvaluationRequest with x5c certificate chains
 //	                          Returns: AuthZEN EvaluationResponse with trust decision
 //
+//	GET /health, /healthz   - Liveness probe for health checks (always returns 200 if running)
+//	                          Returns: {"status": "ok", "timestamp": <timestamp>}
+//
+//	GET /ready, /readiness  - Readiness probe to check if service can accept traffic
+//	                          Returns 200 if ready, 503 if not ready
+//	                          Returns: {"status": "ready|not_ready", "ready": bool, "tsl_count": <number>, ...}
+//
 // See: https://github.com/SUNET/go-trust for more information
 package main
 
@@ -328,6 +335,7 @@ func main() {
 	// Gin API server
 	r := gin.Default()
 	api.RegisterAPIRoutes(r, serverCtx)
+	api.RegisterHealthEndpoints(r, serverCtx)
 	listenAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 
 	// Log startup information
