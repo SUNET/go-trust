@@ -3,17 +3,20 @@ module github.com/SUNET/go-trust
 go 1.25.1
 
 require (
-	github.com/SUNET/g119612 v0.0.0-00010101000000-000000000000
+	github.com/PuerkitoBio/goquery v1.10.3
+	github.com/SUNET/g119612 v0.0.0-20251008163959-71c7cad28e1c
+	github.com/ThalesGroup/crypto11 v1.6.0
+	github.com/beevik/etree v1.5.1
 	github.com/gin-gonic/gin v1.11.0
+	github.com/russellhaering/goxmldsig v1.5.0
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.10.3 // indirect
-	github.com/ThalesGroup/crypto11 v1.6.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	github.com/beevik/etree v1.5.1 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
@@ -39,8 +42,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.54.1 // indirect
-	github.com/russellhaering/goxmldsig v1.5.0 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
@@ -52,7 +53,6 @@ require (
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
 )
