@@ -58,7 +58,14 @@ jobs:
       if: github.ref == 'refs/heads/main'
       run: |
         mkdir -p .badges/main
-        mv coverage.svg .badges/main/coverage.svg 2>/dev/null || true
+        if [ -f coverage.svg ]; then
+          mv coverage.svg .badges/main/coverage.svg
+          echo "Coverage badge moved successfully"
+        else
+          echo "Warning: coverage.svg not found, creating placeholder"
+          echo '<svg xmlns="http://www.w3.org/2000/svg" width="108" height="20"><text x="5" y="15">coverage: N/A</text></svg>' > .badges/main/coverage.svg
+        fi
+        ls -la .badges/main/
 
     - name: Get Go version
       id: go-version
