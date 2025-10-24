@@ -172,6 +172,6 @@ Dockerfile:
 	echo 'RUN apk add --no-cache build-base' >> Dockerfile
 	echo 'RUN CGO_ENABLED=1 go build -ldflags "-X main.Version=${VERSION} -s -w" -trimpath -o app ./cmd/main.go' >> Dockerfile
 	echo 'FROM alpine:latest' >> Dockerfile
-	echo 'RUN apk add --no-cache libc6-compat ca-certificates' >> Dockerfile
+	echo 'RUN apk add --no-cache libc6-compat ca-certificates bash openssl libxslt' >> Dockerfile
 	echo 'COPY --from=builder /src/app /app' >> Dockerfile
 	echo 'ENTRYPOINT ["/app"]' >> Dockerfile
