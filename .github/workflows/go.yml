@@ -31,7 +31,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libxslt1-dev xsltproc
+        sudo apt-get install -y libxslt1-dev xsltproc bc
 
     - name: Verify dependencies
       run: go mod verify
@@ -50,22 +50,31 @@ jobs:
 
     - name: Generate coverage badge
       if: github.ref == 'refs/heads/main'
-      uses: tj-actions/coverage-badge-go@v2
-      with:
-        filename: coverage.txt
-
-    - name: Move coverage badge to badges directory
-      if: github.ref == 'refs/heads/main'
       run: |
+        # Calculate coverage percentage from coverage.txt
+        COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Coverage: ${COVERAGE}%"
+        
+        # Generate coverage badge SVG
         mkdir -p .badges/main
-        if [ -f coverage.svg ]; then
-          mv coverage.svg .badges/main/coverage.svg
-          echo "Coverage badge moved successfully"
+        if (( $(echo "$COVERAGE >= 80" | bc -l) )); then
+          COLOR="brightgreen"
+        elif (( $(echo "$COVERAGE >= 70" | bc -l) )); then
+          COLOR="green"
+        elif (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+          COLOR="yellowgreen"
+        elif (( $(echo "$COVERAGE >= 50" | bc -l) )); then
+          COLOR="yellow"
+        elif (( $(echo "$COVERAGE >= 40" | bc -l) )); then
+          COLOR="orange"
         else
-          echo "Warning: coverage.svg not found, creating placeholder"
-          echo '<svg xmlns="http://www.w3.org/2000/svg" width="108" height="20"><text x="5" y="15">coverage: N/A</text></svg>' > .badges/main/coverage.svg
+          COLOR="red"
         fi
-        ls -la .badges/main/
+        
+        # Use shields.io to generate the badge
+        curl -s "https://img.shields.io/badge/coverage-${COVERAGE}%25-${COLOR}.svg" > .badges/main/coverage.svg
+        echo "Generated coverage badge: ${COVERAGE}% (${COLOR})"
+        ls -la .badges/main/coverage.svg
 
     - name: Get Go version
       id: go-version
