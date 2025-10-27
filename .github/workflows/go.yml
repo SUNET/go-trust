@@ -139,8 +139,21 @@ jobs:
 
         # Add and commit
         git add .badges/main/
-        git diff --staged --quiet || git commit -m "chore: Update badges [skip ci]"
+        echo "Git status:"
+        git status
+        echo "Git diff staged:"
+        git diff --staged --stat
+        
+        # Commit if there are staged changes
+        if ! git diff --staged --quiet; then
+          git commit -m "chore: Update badges [skip ci]"
+          echo "Changes committed"
+        else
+          echo "No changes detected - badges are already up to date"
+        fi
+        
         git push origin badges
+
 
   lint:
     name: Lint
