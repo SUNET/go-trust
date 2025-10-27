@@ -130,6 +130,11 @@ jobs:
         # Fetch or create badges branch
         git fetch origin badges:badges 2>/dev/null || git branch badges
         git checkout badges
+        
+        echo "Files in .badges/main before copy:"
+        ls -la .badges/main/ || echo "Directory doesn't exist"
+        echo "Git status before copy:"
+        git status --short
 
         # Copy the generated badge files from temp
         mkdir -p .badges/main
@@ -137,13 +142,18 @@ jobs:
         echo "Badges copied to badges branch:"
         ls -la .badges/main/
 
+        echo "Git status after copy (before add):"
+        git status --short
+
         # Add and commit
         git add .badges/main/
-        echo "Git status:"
+        echo "Git status after add:"
         git status
         echo "Git diff staged:"
         git diff --staged --stat
-        
+        echo "Git diff staged (name-status):"
+        git diff --staged --name-status
+
         # Commit if there are staged changes
         if ! git diff --staged --quiet; then
           git commit -m "chore: Update badges [skip ci]"
@@ -151,7 +161,7 @@ jobs:
         else
           echo "No changes detected - badges are already up to date"
         fi
-        
+
         git push origin badges
 
 
