@@ -134,46 +134,27 @@ jobs:
         # This ensures we get the exact state from origin/badges
         git checkout -B badges origin/badges 2>/dev/null || git checkout -b badges
 
-        # Remove the .badges directory from git tracking AND filesystem
-        git rm -rf .badges 2>/dev/null || true
-        rm -rf .badges
-
-        # Reset to unstage the deletion (we want a clean slate)
-        git reset HEAD .badges 2>/dev/null || true
-
         echo "Files in .badges/main before copy:"
         ls -la .badges/main/ || echo "Directory doesn't exist"
-        echo "Git status before copy:"
-        git status --short        # Copy the generated badge files from temp
+        
+        # Copy the generated badge files from temp  
         mkdir -p .badges/main
         cp -v /tmp/badges/*.svg .badges/main/
         echo "Badges copied to badges branch:"
         ls -la .badges/main/
 
-        echo "Git status after copy (before add):"
+        echo "Git status after copy:"
         git status --short
-        echo "Git status with untracked files:"
-        git status -u
-        echo "List of untracked files:"
-        git ls-files --others --exclude-standard
 
-        # Add and commit
-        git add .badges/main/
+        # Force add all badge files (both new and modified)
+        git add -f .badges/main/*.svg
         echo "Git status after add:"
-        git status
+        git status --short
         echo "Git diff staged:"
-        git diff --staged --stat
-        echo "Git diff staged (name-status):"
         git diff --staged --name-status
 
-        # Commit if there are staged changes
-        if ! git diff --staged --quiet; then
-          git commit -m "chore: Update badges [skip ci]"
-          echo "Changes committed"
-        else
-          echo "No changes detected - badges are already up to date"
-        fi
-
+        # Commit and push (always, even if no changes - files might have same content)
+        git commit -m "chore: Update badges [skip ci]" || echo "Nothing to commit"
         git push origin badges
 
   # Disabled: golangci-lint was built with Go 1.24, incompatible with 1.25
