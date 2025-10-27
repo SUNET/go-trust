@@ -129,19 +129,21 @@ jobs:
 
         # Fetch or create badges branch and checkout directly from remote
         git fetch origin badges 2>/dev/null || true
-        
+
         # Checkout badges branch from origin, creating/resetting local branch
         # This ensures we get the exact state from origin/badges
         git checkout -B badges origin/badges 2>/dev/null || git checkout -b badges
-        
-        # Clean up any untracked files from the working directory
-        # (files like .badges/main/coverage.svg that aren't in origin/badges)
-        git clean -fd
+
+        # Forcefully remove .badges directory to ensure truly clean state
+        # git clean doesn't seem to remove these files consistently
+        rm -rf .badges
 
         echo "Files in .badges/main before copy:"
         ls -la .badges/main/ || echo "Directory doesn't exist"
         echo "Git status before copy:"
-        git status --short        # Copy the generated badge files from temp
+        git status --short
+        
+        # Copy the generated badge files from temp
         mkdir -p .badges/main
         cp -v /tmp/badges/*.svg .badges/main/
         echo "Badges copied to badges branch:"
