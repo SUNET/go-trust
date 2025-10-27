@@ -138,6 +138,9 @@ jobs:
         git rm -rf .badges 2>/dev/null || true
         rm -rf .badges
 
+        # Reset to unstage the deletion (we want a clean slate)
+        git reset HEAD .badges 2>/dev/null || true
+
         echo "Files in .badges/main before copy:"
         ls -la .badges/main/ || echo "Directory doesn't exist"
         echo "Git status before copy:"
