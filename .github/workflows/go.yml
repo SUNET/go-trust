@@ -151,6 +151,10 @@ jobs:
 
         echo "Git status after copy (before add):"
         git status --short
+        echo "Git status with untracked files:"
+        git status -u
+        echo "List of untracked files:"
+        git ls-files --others --exclude-standard
 
         # Add and commit
         git add .badges/main/
