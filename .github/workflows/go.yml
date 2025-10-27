@@ -54,7 +54,7 @@ jobs:
         # Calculate coverage percentage from coverage.txt
         COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/%//')
         echo "Coverage: ${COVERAGE}%"
-        
+
         # Generate coverage badge SVG
         mkdir -p .badges/main
         if (( $(echo "$COVERAGE >= 80" | bc -l) )); then
@@ -70,7 +70,7 @@ jobs:
         else
           COLOR="red"
         fi
-        
+
         # Use shields.io to generate the badge
         curl -s "https://img.shields.io/badge/coverage-${COVERAGE}%25-${COLOR}.svg" > .badges/main/coverage.svg
         echo "Generated coverage badge: ${COVERAGE}% (${COLOR})"
@@ -92,17 +92,21 @@ jobs:
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="86" height="20" role="img" aria-label="golang: ${{ env.GO_VERSION }}"><title>golang: ${{ env.GO_VERSION }}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="86" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="49" height="20" fill="#555"/><rect x="49" width="37" height="20" fill="#007ec6"/><rect width="86" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="255" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="390">golang</text><text x="255" y="140" transform="scale(.1)" fill="#fff" textLength="390">golang</text><text aria-hidden="true" x="665" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="270">${{ env.GO_VERSION }}</text><text x="665" y="140" transform="scale(.1)" fill="#fff" textLength="270">${{ env.GO_VERSION }}</text></g></svg>
         EOF
 
-    - name: Verify Changed files
+    - name: Verify badge files exist
       if: github.ref == 'refs/heads/main'
-      uses: tj-actions/verify-changed-files@v17
-      id: verify-changed-files
-      with:
-        files: |
-          .badges/main/coverage.svg
-          .badges/main/golang.svg
+      run: |
+        echo "Checking for badge files..."
+        ls -la .badges/main/
+        if [ -f .badges/main/coverage.svg ] && [ -f .badges/main/golang.svg ]; then
+          echo "Both badge files exist"
+          echo "BADGES_EXIST=true" >> $GITHUB_ENV
+        else
+          echo "Warning: One or more badge files missing"
+          echo "BADGES_EXIST=false" >> $GITHUB_ENV
+        fi
 
     - name: Commit badges
-      if: github.ref == 'refs/heads/main' && steps.verify-changed-files.outputs.files_changed == 'true'
+      if: github.ref == 'refs/heads/main' && env.BADGES_EXIST == 'true'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
