@@ -92,22 +92,24 @@ jobs:
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="86" height="20" role="img" aria-label="golang: ${{ env.GO_VERSION }}"><title>golang: ${{ env.GO_VERSION }}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="86" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="49" height="20" fill="#555"/><rect x="49" width="37" height="20" fill="#007ec6"/><rect width="86" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="255" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="390">golang</text><text x="255" y="140" transform="scale(.1)" fill="#fff" textLength="390">golang</text><text aria-hidden="true" x="665" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="270">${{ env.GO_VERSION }}</text><text x="665" y="140" transform="scale(.1)" fill="#fff" textLength="270">${{ env.GO_VERSION }}</text></g></svg>
         EOF
 
-    - name: Verify badge files exist
+    - name: Commit badges
       if: github.ref == 'refs/heads/main'
       run: |
         echo "Checking for badge files..."
-        ls -la .badges/main/
-        if [ -f .badges/main/coverage.svg ] && [ -f .badges/main/golang.svg ]; then
-          echo "Both badge files exist"
-          echo "BADGES_EXIST=true" >> $GITHUB_ENV
-        else
-          echo "Warning: One or more badge files missing"
-          echo "BADGES_EXIST=false" >> $GITHUB_ENV
+        ls -la .badges/main/ || { echo "Badge directory not found"; exit 0; }
+        
+        if [ ! -f .badges/main/coverage.svg ]; then
+          echo "Warning: coverage.svg not found, skipping commit"
+          exit 0
         fi
-
-    - name: Commit badges
-      if: github.ref == 'refs/heads/main' && env.BADGES_EXIST == 'true'
-      run: |
+        
+        if [ ! -f .badges/main/golang.svg ]; then
+          echo "Warning: golang.svg not found, skipping commit"
+          exit 0
+        fi
+        
+        echo "Both badge files exist, proceeding with commit"
+        
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
 
