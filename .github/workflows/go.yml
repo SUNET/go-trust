@@ -97,32 +97,35 @@ jobs:
       run: |
         echo "Checking for badge files..."
         ls -la .badges/main/ || { echo "Badge directory not found"; exit 0; }
-        
+
         if [ ! -f .badges/main/coverage.svg ]; then
           echo "Warning: coverage.svg not found, skipping commit"
           exit 0
         fi
-        
+
         if [ ! -f .badges/main/golang.svg ]; then
           echo "Warning: golang.svg not found, skipping commit"
           exit 0
         fi
-        
+
         echo "Both badge files exist, proceeding with commit"
-        
+
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
 
-        # Save generated badges to temp location
+        # Save generated badges to temp location BEFORE any git operations
         mkdir -p /tmp/badges
-        cp .badges/main/*.svg /tmp/badges/ 2>/dev/null || true
-
-        # Save current branch
-        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        cp -v .badges/main/*.svg /tmp/badges/
+        echo "Badges saved to /tmp:"
+        ls -la /tmp/badges/
 
         # Clean up any changes (including README.md modifications by badge action)
         git checkout -- .
         git clean -fd
+
+        # Verify badges are still in /tmp after clean
+        echo "Verifying badges in /tmp after git clean:"
+        ls -la /tmp/badges/
 
         # Fetch or create badges branch
         git fetch origin badges:badges 2>/dev/null || git branch badges
@@ -130,7 +133,9 @@ jobs:
 
         # Copy the generated badge files from temp
         mkdir -p .badges/main
-        cp /tmp/badges/*.svg .badges/main/ || true
+        cp -v /tmp/badges/*.svg .badges/main/
+        echo "Badges copied to badges branch:"
+        ls -la .badges/main/
 
         # Add and commit
         git add .badges/main/
