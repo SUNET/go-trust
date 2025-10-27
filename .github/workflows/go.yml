@@ -129,14 +129,15 @@ jobs:
 
         # Fetch or create badges branch
         git fetch origin badges:badges 2>/dev/null || git branch badges
-        git checkout badges
+        
+        # Force clean checkout of badges branch, removing any untracked files
+        git checkout -f badges
+        git clean -fd
         
         echo "Files in .badges/main before copy:"
         ls -la .badges/main/ || echo "Directory doesn't exist"
         echo "Git status before copy:"
-        git status --short
-
-        # Copy the generated badge files from temp
+        git status --short        # Copy the generated badge files from temp
         mkdir -p .badges/main
         cp -v /tmp/badges/*.svg .badges/main/
         echo "Badges copied to badges branch:"
