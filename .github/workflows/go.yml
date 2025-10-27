@@ -133,6 +133,9 @@ jobs:
         # Checkout badges branch from origin, creating/resetting local branch
         # This ensures we get the exact state from origin/badges
         git checkout -B badges origin/badges 2>/dev/null || git checkout -b badges
+        
+        # Reset the index to match HEAD (in case files from previous branch are in index)
+        git reset --hard HEAD
 
         # Forcefully remove .badges directory to ensure truly clean state
         # git clean doesn't seem to remove these files consistently
