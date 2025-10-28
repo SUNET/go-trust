@@ -1,6 +1,7 @@
 # Binaries for programs and plugins
 output
 gt
+gt-test
 *.exe
 *.exe~
 *.dll

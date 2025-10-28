@@ -24,6 +24,26 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/.well-known/authzen-configuration": {
+            "get": {
+                "description": "Returns Policy Decision Point metadata according to Section 9 of the AuthZEN specification\nThis endpoint provides service discovery information including supported endpoints and capabilities\nper RFC 8615 well-known URI registration",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AuthZEN"
+                ],
+                "summary": "AuthZEN PDP discovery endpoint",
+                "responses": {
+                    "200": {
+                        "description": "PDP metadata",
+                        "schema": {
+                            "$ref": "#/definitions/authzen.PDPMetadata"
+                        }
+                    }
+                }
+            }
+        },
         "/evaluation": {
             "post": {
                 "description": "Evaluates whether a name-to-key binding is trusted according to loaded TSLs\n\nThis endpoint implements the AuthZEN Trust Registry Profile as specified in\ndraft-johansson-authzen-trust. It validates that a public key (in resource.key)\nis correctly bound to a name (in subject.id) according to ETSI TS 119612 Trust Status Lists.\n\nThe request MUST have:\n- subject.type = \"key\" and subject.id = the name to validate\n- resource.type = \"jwk\" or \"x5c\" with resource.key containing the public key/certificates\n- resource.id MUST equal subject.id\n- action (optional) with name = the role being validated",
@@ -316,6 +336,53 @@ const docTemplate = `{
                 "reason": {
                     "description": "Reason information (user or admin)",
                     "type": "object"
+                }
+            }
+        },
+        "authzen.PDPMetadata": {
+            "description": "Policy Decision Point metadata for service discovery",
+            "type": "object",
+            "properties": {
+                "access_evaluation_endpoint": {
+                    "description": "REQUIRED. URL of Access Evaluation API endpoint",
+                    "type": "string",
+                    "example": "https://pdp.example.com/evaluation"
+                },
+                "access_evaluations_endpoint": {
+                    "description": "OPTIONAL. URL of Access Evaluations API endpoint (for batch requests)",
+                    "type": "string",
+                    "example": "https://pdp.example.com/evaluations"
+                },
+                "capabilities": {
+                    "description": "OPTIONAL. JSON array containing a list of registered IANA URNs referencing PDP\nspecific capabilities.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "policy_decision_point": {
+                    "description": "REQUIRED. The Policy Decision Point identifier, which is a URL that uses the\n\"https\" scheme and has no query or fragment components. This is used to prevent\nPDP mix-up attacks.",
+                    "type": "string",
+                    "example": "https://pdp.example.com"
+                },
+                "search_action_endpoint": {
+                    "description": "OPTIONAL. URL of Search API endpoint for action entities",
+                    "type": "string",
+                    "example": "https://pdp.example.com/search/action"
+                },
+                "search_resource_endpoint": {
+                    "description": "OPTIONAL. URL of Search API endpoint for resource entities",
+                    "type": "string",
+                    "example": "https://pdp.example.com/search/resource"
+                },
+                "search_subject_endpoint": {
+                    "description": "OPTIONAL. URL of Search API endpoint for subject entities",
+                    "type": "string",
+                    "example": "https://pdp.example.com/search/subject"
+                },
+                "signed_metadata": {
+                    "description": "OPTIONAL. A JWT containing metadata parameters about the protected resource as claims.\nThis provides signed metadata that takes precedence over plain JSON metadata.",
+                    "type": "string"
                 }
             }
         },
