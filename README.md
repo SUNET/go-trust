@@ -22,7 +22,7 @@
 
 Go-Trust is a local trust engine that provides trust decisions based on ETSI TS 119612 Trust Status Lists (TSLs). It allows clients to abstract trust decisions through an AuthZEN policy decision point (PDP). The service evaluates trust in subjects identified by X509 certificates using a set of TSLs.
 
-Go-Trust is not meant to be used cross trust boundaries. The reason for creating Go-Trust is to promote interoperability across implementations that rely on ETSI trust status lists such as the EUDI wallet. ETSI TS 119 612 is complex to implement correctly and hopefully Go-Trust provides a way to both ensure correct trust evaluation as well as provide performance enhancements by allowing for local caching etc. Go-Trust is an API service meant to be run inside the same trust domain as the entity that relies on trust evaluation (for instance a wallet unit or an issuer).
+Go-Trust is not meant to be used across trust boundaries. The reason for creating Go-Trust is to promote interoperability across implementations that rely on ETSI trust status lists such as the EUDI wallet. ETSI TS 119 612 is complex to implement correctly and hopefully Go-Trust provides a way to both ensure correct trust evaluation as well as provide performance enhancements by allowing for local caching etc. Go-Trust is an API service meant to be run inside the same trust domain as the entity that relies on trust evaluation (for instance a wallet unit or an issuer).
 
 Go-Trust can also be used to maintain and publish ETSI trust status lists, act as a local distribution point and provide policy based transformation of trust status lists.
 

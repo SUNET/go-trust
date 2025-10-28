@@ -1,0 +1,261 @@
+basePath: /
+definitions:
+  api.HealthResponse:
+    properties:
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  api.ReadinessResponse:
+    properties:
+      last_processed:
+        type: string
+      message:
+        type: string
+      ready:
+        type: boolean
+      status:
+        type: string
+      timestamp:
+        type: string
+      tsl_count:
+        type: integer
+    type: object
+  authzen.ActionEntity:
+    properties:
+      name:
+        description: The name of the action being performed
+        example: trust
+        type: string
+      properties:
+        additionalProperties:
+          type: string
+        description: Additional properties for the action
+        type: object
+    type: object
+  authzen.Entity:
+    description: Entity in an AuthZEN request (subject, resource, or action)
+    properties:
+      id:
+        description: The unique identifier for this entity
+        example: cert-123
+        type: string
+      properties:
+        additionalProperties:
+          type: string
+        description: Additional properties, may include X.509 certificates as "x5c"
+        type: object
+      type:
+        description: The entity type identifier
+        example: x509_certificate
+        type: string
+    type: object
+  authzen.EvaluationRequest:
+    description: AuthZEN evaluation request for trust decision
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/authzen.ActionEntity'
+        description: The action being performed
+      context:
+        additionalProperties:
+          type: string
+        description: Additional contextual information
+        type: object
+      resource:
+        allOf:
+        - $ref: '#/definitions/authzen.Entity'
+        description: The entity being acted upon
+      subject:
+        allOf:
+        - $ref: '#/definitions/authzen.Entity'
+        description: The entity attempting to perform an action
+    type: object
+  authzen.EvaluationResponse:
+    description: AuthZEN evaluation response with trust decision
+    properties:
+      context:
+        allOf:
+        - $ref: '#/definitions/authzen.EvaluationResponseContext'
+        description: Optional context with decision details
+      decision:
+        description: Whether the action is permitted (true) or denied (false)
+        example: true
+        type: boolean
+    type: object
+  authzen.EvaluationResponseContext:
+    properties:
+      id:
+        description: An optional identifier for the decision
+        example: decision-123
+        type: string
+      reason_admin:
+        description: Detailed reason for administrators
+        type: object
+      reason_user:
+        description: User-friendly reason message
+        type: object
+    type: object
+host: localhost:6001
+info:
+  contact:
+    email: noreply@sunet.se
+    name: SUNET
+    url: https://github.com/SUNET/go-trust
+  description: |-
+    Trust decision engine for ETSI TS 119612 Trust Status Lists (TSLs)
+
+    Go-Trust provides AuthZEN-based trust decisions for X.509 certificates using ETSI trust status lists.
+    It processes TSLs, validates certificates, and provides health/metrics endpoints for production deployment.
+  license:
+    name: BSD-2-Clause
+    url: https://opensource.org/licenses/BSD-2-Clause
+  termsOfService: https://github.com/SUNET/go-trust
+  title: Go-Trust API
+  version: "1.0"
+paths:
+  /authzen/decision:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Evaluates whether an X.509 certificate chain is trusted according to loaded TSLs
+
+        This endpoint implements the AuthZEN evaluation protocol. It accepts certificate chains
+        in the x5c format (base64-encoded DER certificates) and validates them against the
+        trusted certificates loaded from ETSI TS 119612 Trust Status Lists.
+      parameters:
+      - description: AuthZEN Evaluation Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authzen.EvaluationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trust decision (decision=true for trusted, false for untrusted)
+          schema:
+            $ref: '#/definitions/authzen.EvaluationResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Evaluate trust decision (AuthZEN)
+      tags:
+      - AuthZEN
+  /health:
+    get:
+      description: Returns OK if the server is running and able to handle requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.HealthResponse'
+      summary: Liveness check
+      tags:
+      - Health
+  /healthz:
+    get:
+      description: Returns OK if the server is running and able to handle requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.HealthResponse'
+      summary: Liveness check
+      tags:
+      - Health
+  /info:
+    get:
+      description: |-
+        Returns detailed summaries of all loaded Trust Status Lists
+
+        This endpoint provides comprehensive information about each TSL including:
+        - Territory code
+        - Sequence number
+        - Issue date
+        - Next update date
+        - Number of services
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: tsl_summaries
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get TSL information
+      tags:
+      - Status
+  /readiness:
+    get:
+      description: Returns ready status if pipeline has been processed and TSLs are
+        loaded
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is ready
+          schema:
+            $ref: '#/definitions/api.ReadinessResponse'
+        "503":
+          description: Service is not ready
+          schema:
+            $ref: '#/definitions/api.ReadinessResponse'
+      summary: Readiness check
+      tags:
+      - Health
+  /ready:
+    get:
+      description: Returns ready status if pipeline has been processed and TSLs are
+        loaded
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is ready
+          schema:
+            $ref: '#/definitions/api.ReadinessResponse'
+        "503":
+          description: Service is not ready
+          schema:
+            $ref: '#/definitions/api.ReadinessResponse'
+      summary: Readiness check
+      tags:
+      - Health
+  /status:
+    get:
+      description: Returns the current server status including TSL count and last
+        processing time
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: tsl_count, last_processed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get server status
+      tags:
+      - Status
+schemes:
+- http
+- https
+swagger: "2.0"
+tags:
+- description: Health check and readiness endpoints for Kubernetes and monitoring
+    systems
+  name: Health
+- description: Server status and TSL information endpoints
+  name: Status
+- description: AuthZEN protocol endpoints for trust decision evaluation
+  name: AuthZEN

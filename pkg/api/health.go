@@ -43,9 +43,25 @@ type ReadinessResponse struct {
 //
 // If these conditions are not met, it returns 503 Service Unavailable.
 func RegisterHealthEndpoints(r *gin.Engine, serverCtx *ServerContext) {
-	// Liveness probe - simple health check that returns 200 if server is running
-	// This is used by Kubernetes to determine if the container should be restarted
-	healthHandler := func(c *gin.Context) {
+	r.GET("/health", HealthHandler(serverCtx))
+	r.GET("/healthz", HealthHandler(serverCtx))
+	r.GET("/ready", ReadinessHandler(serverCtx))
+	r.GET("/readiness", ReadinessHandler(serverCtx))
+
+	serverCtx.Logger.Info("Health check endpoints registered",
+		logging.F("endpoints", []string{"/health", "/healthz", "/ready", "/readiness"}))
+}
+
+// HealthHandler godoc
+// @Summary Liveness check
+// @Description Returns OK if the server is running and able to handle requests
+// @Tags Health
+// @Produce json
+// @Success 200 {object} HealthResponse
+// @Router /health [get]
+// @Router /healthz [get]
+func HealthHandler(serverCtx *ServerContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		serverCtx.Logger.Debug("Health check requested",
 			logging.F("remote_ip", c.ClientIP()),
 			logging.F("endpoint", c.Request.URL.Path))
@@ -55,13 +71,19 @@ func RegisterHealthEndpoints(r *gin.Engine, serverCtx *ServerContext) {
 			Timestamp: time.Now(),
 		})
 	}
+}
 
-	r.GET("/health", healthHandler)
-	r.GET("/healthz", healthHandler) // Common Kubernetes convention
-
-	// Readiness probe - checks if the service is ready to accept traffic
-	// This is used by Kubernetes to determine if the pod should receive traffic
-	readinessHandler := func(c *gin.Context) {
+// ReadinessHandler godoc
+// @Summary Readiness check
+// @Description Returns ready status if pipeline has been processed and TSLs are loaded
+// @Tags Health
+// @Produce json
+// @Success 200 {object} ReadinessResponse "Service is ready"
+// @Failure 503 {object} ReadinessResponse "Service is not ready"
+// @Router /ready [get]
+// @Router /readiness [get]
+func ReadinessHandler(serverCtx *ServerContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		serverCtx.RLock()
 		tslCount := 0
 		lastProcessed := ""
@@ -117,10 +139,4 @@ func RegisterHealthEndpoints(r *gin.Engine, serverCtx *ServerContext) {
 			c.JSON(503, response)
 		}
 	}
-
-	r.GET("/ready", readinessHandler)
-	r.GET("/readiness", readinessHandler) // Common Kubernetes convention
-
-	serverCtx.Logger.Info("Health check endpoints registered",
-		logging.F("endpoints", []string{"/health", "/healthz", "/ready", "/readiness"}))
 }

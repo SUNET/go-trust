@@ -1,0 +1,367 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Trust decision engine for ETSI TS 119612 Trust Status Lists (TSLs)\n\nGo-Trust provides AuthZEN-based trust decisions for X.509 certificates using ETSI trust status lists.\nIt processes TSLs, validates certificates, and provides health/metrics endpoints for production deployment.",
+        "title": "Go-Trust API",
+        "termsOfService": "https://github.com/SUNET/go-trust",
+        "contact": {
+            "name": "SUNET",
+            "url": "https://github.com/SUNET/go-trust",
+            "email": "noreply@sunet.se"
+        },
+        "license": {
+            "name": "BSD-2-Clause",
+            "url": "https://opensource.org/licenses/BSD-2-Clause"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:6001",
+    "basePath": "/",
+    "paths": {
+        "/authzen/decision": {
+            "post": {
+                "description": "Evaluates whether an X.509 certificate chain is trusted according to loaded TSLs\n\nThis endpoint implements the AuthZEN evaluation protocol. It accepts certificate chains\nin the x5c format (base64-encoded DER certificates) and validates them against the\ntrusted certificates loaded from ETSI TS 119612 Trust Status Lists.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AuthZEN"
+                ],
+                "summary": "Evaluate trust decision (AuthZEN)",
+                "parameters": [
+                    {
+                        "description": "AuthZEN Evaluation Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authzen.EvaluationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trust decision (decision=true for trusted, false for untrusted)",
+                        "schema": {
+                            "$ref": "#/definitions/authzen.EvaluationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns OK if the server is running and able to handle requests",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Liveness check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/healthz": {
+            "get": {
+                "description": "Returns OK if the server is running and able to handle requests",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Liveness check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/info": {
+            "get": {
+                "description": "Returns detailed summaries of all loaded Trust Status Lists\n\nThis endpoint provides comprehensive information about each TSL including:\n- Territory code\n- Sequence number\n- Issue date\n- Next update date\n- Number of services",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Status"
+                ],
+                "summary": "Get TSL information",
+                "responses": {
+                    "200": {
+                        "description": "tsl_summaries",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/readiness": {
+            "get": {
+                "description": "Returns ready status if pipeline has been processed and TSLs are loaded",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Readiness check",
+                "responses": {
+                    "200": {
+                        "description": "Service is ready",
+                        "schema": {
+                            "$ref": "#/definitions/api.ReadinessResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service is not ready",
+                        "schema": {
+                            "$ref": "#/definitions/api.ReadinessResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/ready": {
+            "get": {
+                "description": "Returns ready status if pipeline has been processed and TSLs are loaded",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Readiness check",
+                "responses": {
+                    "200": {
+                        "description": "Service is ready",
+                        "schema": {
+                            "$ref": "#/definitions/api.ReadinessResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service is not ready",
+                        "schema": {
+                            "$ref": "#/definitions/api.ReadinessResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/status": {
+            "get": {
+                "description": "Returns the current server status including TSL count and last processing time",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Status"
+                ],
+                "summary": "Get server status",
+                "responses": {
+                    "200": {
+                        "description": "tsl_count, last_processed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "api.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.ReadinessResponse": {
+            "type": "object",
+            "properties": {
+                "last_processed": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "tsl_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "authzen.ActionEntity": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "The name of the action being performed",
+                    "type": "string",
+                    "example": "trust"
+                },
+                "properties": {
+                    "description": "Additional properties for the action",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "authzen.Entity": {
+            "description": "Entity in an AuthZEN request (subject, resource, or action)",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "The unique identifier for this entity",
+                    "type": "string",
+                    "example": "cert-123"
+                },
+                "properties": {
+                    "description": "Additional properties, may include X.509 certificates as \"x5c\"",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "type": {
+                    "description": "The entity type identifier",
+                    "type": "string",
+                    "example": "x509_certificate"
+                }
+            }
+        },
+        "authzen.EvaluationRequest": {
+            "description": "AuthZEN evaluation request for trust decision",
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "The action being performed",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/authzen.ActionEntity"
+                        }
+                    ]
+                },
+                "context": {
+                    "description": "Additional contextual information",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "resource": {
+                    "description": "The entity being acted upon",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/authzen.Entity"
+                        }
+                    ]
+                },
+                "subject": {
+                    "description": "The entity attempting to perform an action",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/authzen.Entity"
+                        }
+                    ]
+                }
+            }
+        },
+        "authzen.EvaluationResponse": {
+            "description": "AuthZEN evaluation response with trust decision",
+            "type": "object",
+            "properties": {
+                "context": {
+                    "description": "Optional context with decision details",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/authzen.EvaluationResponseContext"
+                        }
+                    ]
+                },
+                "decision": {
+                    "description": "Whether the action is permitted (true) or denied (false)",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "authzen.EvaluationResponseContext": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "An optional identifier for the decision",
+                    "type": "string",
+                    "example": "decision-123"
+                },
+                "reason_admin": {
+                    "description": "Detailed reason for administrators",
+                    "type": "object"
+                },
+                "reason_user": {
+                    "description": "User-friendly reason message",
+                    "type": "object"
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "description": "Health check and readiness endpoints for Kubernetes and monitoring systems",
+            "name": "Health"
+        },
+        {
+            "description": "Server status and TSL information endpoints",
+            "name": "Status"
+        },
+        {
+            "description": "AuthZEN protocol endpoints for trust decision evaluation",
+            "name": "AuthZEN"
+        }
+    ]
+}

@@ -59,9 +59,20 @@ test-all: test test-integration ## run all tests including integration tests
 build: check-go-version ## build the library
 	CGO_ENABLED=1 go build ${LDFLAGS} -trimpath -o gt -a ./cmd/main.go
 
+.PHONY: swagger
+swagger: install-swag ## Generate OpenAPI/Swagger documentation
+	$(GOBIN)/swag init -g main.go --output docs/swagger --parseDependency --parseInternal 2>&1 | grep -v "warning: failed to evaluate" || true
+	@echo "Swagger documentation generated at docs/swagger/"
+	@echo "View at: http://localhost:6001/swagger/index.html (when server is running)"
+
+.PHONY: install-swag
+install-swag: ## Install swag tool for generating Swagger docs
+	@which swag > /dev/null || (echo "Installing swag..." && go install github.com/swaggo/swag/cmd/swag@latest)
+
 .PHONY: clean
 clean: ## remove temporary files
 	go clean
+	rm -rf docs/swagger
 
 .PHONY: deps
 deps: ## Update dependencies

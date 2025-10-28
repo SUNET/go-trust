@@ -136,8 +136,8 @@ jobs:
 
         echo "Files in .badges/main before copy:"
         ls -la .badges/main/ || echo "Directory doesn't exist"
-        
-        # Copy the generated badge files from temp  
+
+        # Copy the generated badge files from temp
         mkdir -p .badges/main
         cp -v /tmp/badges/*.svg .badges/main/
         echo "Badges copied to badges branch:"

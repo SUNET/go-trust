@@ -102,10 +102,7 @@ func TestEvaluationRequestSerialization(t *testing.T) {
 					Type: "document",
 					ID:   "doc456",
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "read",
 				},
 			},
@@ -134,10 +131,7 @@ func TestEvaluationRequestSerialization(t *testing.T) {
 						"valid":  true,
 					},
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "verify",
 					Properties: map[string]interface{}{
 						"timestamp": "2025-10-02T12:00:00Z",
@@ -241,11 +235,7 @@ func TestEvaluationResponseSerialization(t *testing.T) {
 			name: "response with context",
 			response: EvaluationResponse{
 				Decision: true,
-				Context: &struct {
-					ID          string                 `json:"id"`
-					ReasonAdmin map[string]interface{} `json:"reason_admin,omitempty"`
-					ReasonUser  map[string]interface{} `json:"reason_user,omitempty"`
-				}{
+				Context: &EvaluationResponseContext{
 					ID: "decision-123",
 					ReasonAdmin: map[string]interface{}{
 						"rule":      "certificate-validation",
@@ -357,10 +347,7 @@ func TestX509CertificateHandling(t *testing.T) {
 			ID:   "user-1",
 		},
 		Resource: certEntity,
-		Action: struct {
-			Name       string                 `json:"name"`
-			Properties map[string]interface{} `json:"properties,omitempty"`
-		}{
+		Action: ActionEntity{
 			Name: "validate",
 			Properties: map[string]interface{}{
 				"timestamp": time.Now().Format(time.RFC3339),

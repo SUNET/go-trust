@@ -194,5 +194,18 @@ func RegisterMetricsEndpoint(r *gin.Engine, metrics *Metrics) {
 	r.Use(metrics.MetricsMiddleware())
 
 	// Register Prometheus metrics endpoint with custom registry
+	// @Summary Prometheus metrics
+	// @Description Exposes Prometheus metrics for monitoring and alerting
+	// @Description
+	// @Description Metrics include:
+	// @Description - Pipeline execution duration and counts
+	// @Description - TSL processing metrics
+	// @Description - API request rates and latency
+	// @Description - Certificate validation metrics
+	// @Description - Error counts by type
+	// @Tags Metrics
+	// @Produce plain
+	// @Success 200 {string} string "Prometheus metrics in text format"
+	// @Router /metrics [get]
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(metrics.registry, promhttp.HandlerOpts{})))
 }

@@ -52,11 +52,7 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 	}
 	return authzen.EvaluationResponse{
 		Decision: false,
-		Context: &struct {
-			ID          string                 `json:"id"`
-			ReasonAdmin map[string]interface{} `json:"reason_admin,omitempty"`
-			ReasonUser  map[string]interface{} `json:"reason_user,omitempty"`
-		}{
+		Context: &authzen.EvaluationResponseContext{
 			ReasonAdmin: map[string]interface{}{"error": reason},
 		},
 	}
@@ -196,183 +192,16 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 			logging.F("burst", serverCtx.RateLimiter.burst))
 	}
 
-	// Status endpoint returns basic server status information
-	// including the count of TSLs and when the pipeline was last processed
-	r.GET("/status", func(c *gin.Context) {
-		serverCtx.RLock()
-		defer serverCtx.RUnlock()
-		tslCount := 0
-		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
-			tslCount = serverCtx.PipelineContext.TSLs.Size()
-		}
-
-		// Log the status request with structured logging
-		serverCtx.Logger.Info("API status request",
-			logging.F("remote_ip", c.ClientIP()),
-			logging.F("tsl_count", tslCount))
-
-		c.JSON(200, gin.H{
-			"tsl_count":      tslCount,
-			"last_processed": serverCtx.LastProcessed.Format("2006-01-02T15:04:05Z07:00"),
-		})
-	})
-
-	// AuthZEN decision endpoint implements the AuthZEN protocol for making trust decisions
-	// It processes AuthZEN EvaluationRequest objects containing x5c certificate chains
-	// and verifies them against the trusted certificates in the pipeline context
-	r.POST("/authzen/decision", func(c *gin.Context) {
-		var req authzen.EvaluationRequest
-		if err := c.BindJSON(&req); err != nil {
-			// Log invalid request with structured logging
-			serverCtx.Logger.Error("Invalid AuthZEN request",
-				logging.F("remote_ip", c.ClientIP()),
-				logging.F("error", err.Error()))
-			c.JSON(400, gin.H{"error": "invalid request"})
-			return
-		}
-
-		// Log valid request
-		serverCtx.Logger.Debug("Processing AuthZEN request",
-			logging.F("remote_ip", c.ClientIP()))
-
-		// Try to extract x5c from subject, resource, action, and context
-		var allCerts []*x509.Certificate
-		var parseErr error
-		subjectCerts, err := parseX5C(req.Subject.Properties)
-		if err != nil {
-			parseErr = fmt.Errorf("subject x5c: %v", err)
-		}
-		allCerts = append(allCerts, subjectCerts...)
-		resourceCerts, err := parseX5C(req.Resource.Properties)
-		if err != nil && parseErr == nil {
-			parseErr = fmt.Errorf("resource x5c: %v", err)
-		}
-		allCerts = append(allCerts, resourceCerts...)
-		actionCerts, err := parseX5C(req.Action.Properties)
-		if err != nil && parseErr == nil {
-			parseErr = fmt.Errorf("action x5c: %v", err)
-		}
-		allCerts = append(allCerts, actionCerts...)
-		contextCerts, err := parseX5C(req.Context)
-		if err != nil && parseErr == nil {
-			parseErr = fmt.Errorf("context x5c: %v", err)
-		}
-		allCerts = append(allCerts, contextCerts...)
-
-		// If any x5c parse error, return error in AuthZEN-compatible response
-		if parseErr != nil {
-			serverCtx.Logger.Error("AuthZEN certificate parsing error",
-				logging.F("remote_ip", c.ClientIP()),
-				logging.F("error", parseErr.Error()))
-			c.JSON(200, buildResponse(false, parseErr.Error()))
-			return
-		}
-
-		if len(allCerts) > 0 {
-			serverCtx.RLock()
-			certPool := serverCtx.PipelineContext.CertPool
-			serverCtx.RUnlock()
-			if certPool != nil {
-				start := time.Now()
-				opts := x509.VerifyOptions{
-					Roots: certPool,
-				}
-				_, err := allCerts[0].Verify(opts)
-				validationDuration := time.Since(start)
-
-				if err == nil {
-					serverCtx.Logger.Info("AuthZEN request approved",
-						logging.F("remote_ip", c.ClientIP()),
-						logging.F("subject", req.Subject.ID))
-
-					// Record successful validation metrics
-					if serverCtx.Metrics != nil {
-						serverCtx.Metrics.RecordCertValidation(validationDuration, true)
-					}
-
-					c.JSON(200, buildResponse(true, ""))
-				} else {
-					serverCtx.Logger.Info("AuthZEN request denied",
-						logging.F("remote_ip", c.ClientIP()),
-						logging.F("subject", req.Subject.ID),
-						logging.F("error", err.Error()))
-
-					// Record failed validation metrics
-					if serverCtx.Metrics != nil {
-						serverCtx.Metrics.RecordCertValidation(validationDuration, false)
-					}
-
-					c.JSON(200, buildResponse(false, err.Error()))
-				}
-				return
-			} else {
-				serverCtx.Logger.Error("AuthZEN request failed - CertPool is nil",
-					logging.F("remote_ip", c.ClientIP()))
-
-				// Record error metrics
-				if serverCtx.Metrics != nil {
-					serverCtx.Metrics.RecordError("certpool_nil", "authzen_decision")
-				}
-
-				c.JSON(200, buildResponse(false, "CertPool is nil"))
-				return
-			}
-		}
-	})
-
-	// Info endpoint returns detailed information about all loaded TSLs
-	// It provides summaries of each TSL in the current pipeline context
-	r.GET("/info", func(c *gin.Context) {
-		serverCtx.RLock()
-		defer serverCtx.RUnlock()
-		summaries := make([]map[string]interface{}, 0)
-
-		// Add debug logging to inspect the pipeline context
-		tslSize := 0
-		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
-			tslSize = serverCtx.PipelineContext.TSLs.Size()
-		}
-
-		serverCtx.Logger.Debug("API info request: Inspecting pipeline context",
-			logging.F("ctx_nil", serverCtx.PipelineContext == nil),
-			logging.F("tsls_nil", serverCtx.PipelineContext == nil || serverCtx.PipelineContext.TSLs == nil),
-			logging.F("tsls_size", tslSize))
-
-		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
-			for _, tsl := range serverCtx.PipelineContext.TSLs.ToSlice() {
-				if tsl != nil {
-					summaries = append(summaries, tsl.Summary())
-				}
-			}
-		}
-
-		// Log info request with structured logging
-		serverCtx.Logger.Info("API info request",
-			logging.F("remote_ip", c.ClientIP()),
-			logging.F("summary_count", len(summaries)))
-
-		c.JSON(200, gin.H{
-			"tsl_summaries": summaries,
-		})
-	})
+	// Register API handlers
+	r.GET("/status", StatusHandler(serverCtx))
+	r.POST("/authzen/decision", AuthZENDecisionHandler(serverCtx))
+	r.GET("/info", InfoHandler(serverCtx))
 
 	// Test-mode shutdown endpoint
 	// This endpoint is only registered when GO_TRUST_TEST_MODE environment variable is set
 	// It allows integration tests to gracefully shutdown the server
 	if os.Getenv("GO_TRUST_TEST_MODE") == "1" {
-		r.POST("/test/shutdown", func(c *gin.Context) {
-			serverCtx.Logger.Info("Shutdown requested via /test/shutdown endpoint",
-				logging.F("remote_ip", c.ClientIP()))
-
-			c.JSON(200, gin.H{"message": "shutting down"})
-
-			// Trigger graceful shutdown after response is sent
-			go func() {
-				time.Sleep(100 * time.Millisecond) // Give time for response to be sent
-				os.Exit(0)
-			}()
-		})
-
+		r.POST("/test/shutdown", TestShutdownHandler(serverCtx))
 		serverCtx.Logger.Warn("Test mode enabled: /test/shutdown endpoint is available")
 	}
 }

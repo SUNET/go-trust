@@ -99,10 +99,7 @@ func TestX509CertificateToEntity(t *testing.T) {
 			},
 		},
 		Resource: entity,
-		Action: struct {
-			Name       string                 `json:"name"`
-			Properties map[string]interface{} `json:"properties,omitempty"`
-		}{
+		Action: ActionEntity{
 			Name: "validate",
 			Properties: map[string]interface{}{
 				"checkOCSP": true,
@@ -139,10 +136,7 @@ func TestEvaluationRequestValidation(t *testing.T) {
 					Type: "document",
 					ID:   "doc1",
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "read",
 				},
 			},
@@ -158,10 +152,7 @@ func TestEvaluationRequestValidation(t *testing.T) {
 					Type: "document",
 					ID:   "doc1",
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "read",
 				},
 			},
@@ -177,10 +168,7 @@ func TestEvaluationRequestValidation(t *testing.T) {
 					Type: "document",
 					ID:   "doc1",
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "read",
 				},
 			},
@@ -197,10 +185,7 @@ func TestEvaluationRequestValidation(t *testing.T) {
 					Type: "document",
 					ID:   "doc1",
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					// Name is missing
 				},
 			},
@@ -254,10 +239,7 @@ func TestDecisionScenarios(t *testing.T) {
 						"revoked":   false,
 					},
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "validate",
 				},
 			},
@@ -280,10 +262,7 @@ func TestDecisionScenarios(t *testing.T) {
 						"revoked":   false,
 					},
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "validate",
 				},
 			},
@@ -306,10 +285,7 @@ func TestDecisionScenarios(t *testing.T) {
 						"revoked":   true, // Revoked
 					},
 				},
-				Action: struct {
-					Name       string                 `json:"name"`
-					Properties map[string]interface{} `json:"properties,omitempty"`
-				}{
+				Action: ActionEntity{
 					Name: "validate",
 				},
 			},
@@ -327,11 +303,7 @@ func TestDecisionScenarios(t *testing.T) {
 			// Create a response based on the decision
 			response := EvaluationResponse{
 				Decision: result,
-				Context: &struct {
-					ID          string                 `json:"id"`
-					ReasonAdmin map[string]interface{} `json:"reason_admin,omitempty"`
-					ReasonUser  map[string]interface{} `json:"reason_user,omitempty"`
-				}{
+				Context: &EvaluationResponseContext{
 					ID: "decision-" + tt.request.Resource.ID,
 					ReasonAdmin: map[string]interface{}{
 						"certificateValid":   tt.request.Resource.Properties["valid"],
