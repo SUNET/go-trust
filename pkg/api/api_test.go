@@ -321,26 +321,26 @@ func TestInfoEndpoint_NilAndMixedTSLs(t *testing.T) {
 
 func TestAuthzenDecisionEndpoint(t *testing.T) {
 	r, _ := setupTestServer()
+	// AuthZEN Trust Registry Profile compliant request:
+	// - subject.type must be "key"
+	// - resource.type must be "x5c" or "jwk"
+	// - resource.id must equal subject.id
+	// - certificates in resource.key
 	body := `{
 	       "subject": {
-		       "type": "user",
-		       "id": "alice",
-		       "properties": {
-			       "x5c": ["` + testCertBase64 + `"]
-		       }
+		       "type": "key",
+		       "id": "did:example:alice"
 	       },
 	       "resource": {
-		       "type": "document",
-		       "id": "doc1",
-		       "properties": {}
+		       "type": "x5c",
+		       "id": "did:example:alice",
+		       "key": ["` + testCertBase64 + `"]
 	       },
 	       "action": {
-		       "name": "read",
-		       "properties": {}
-	       },
-	       "context": {}
+		       "name": "http://ec.europa.eu/NS/wallet-provider"
+	       }
        }`
-	req, _ := http.NewRequest("POST", "/authzen/decision", strings.NewReader(body))
+	req, _ := http.NewRequest("POST", "/evaluation", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -354,17 +354,26 @@ func TestAuthzenDecisionEndpoint_Errors(t *testing.T) {
 
 	// Malformed JSON
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader("{")))
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader("{")))
 	if w.Code != 400 {
 		t.Errorf("Expected 400 for malformed JSON, got %d", w.Code)
 	}
 
-	// Valid JSON, invalid x5c (not a list)
-	body := `{"subject":{"properties":{"x5c":"notalist"}},"resource":{},"action":{},"context":{}}`
+	// Valid JSON, but violates AuthZEN Trust Registry Profile validation
+	// (subject.type is not "key")
+	body := `{"subject":{"type":"user","id":"alice"},"resource":{"type":"x5c","id":"alice","key":[]}}`
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader(body)))
-	if !strings.Contains(w.Body.String(), "\"decision\":false") {
-		t.Errorf("Expected decision:false for invalid x5c, got %s", w.Body.String())
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader(body)))
+	if w.Code != 400 {
+		t.Errorf("Expected 400 for validation error, got %d", w.Code)
+	}
+
+	// Valid JSON, but resource.id != subject.id (validation error)
+	body = `{"subject":{"type":"key","id":"alice"},"resource":{"type":"x5c","id":"bob","key":["` + testCertBase64 + `"]}}`
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader(body)))
+	if w.Code != 400 {
+		t.Errorf("Expected 400 for resource.id != subject.id, got %d", w.Code)
 	}
 
 	// Valid JSON, missing CertPool
@@ -372,18 +381,18 @@ func TestAuthzenDecisionEndpoint_Errors(t *testing.T) {
 	serverCtx2.Lock()
 	serverCtx2.PipelineContext.CertPool = nil
 	serverCtx2.Unlock()
-	body = `{"subject":{"properties":{"x5c":["` + testCertBase64 + `"]}},"resource":{},"action":{},"context":{}}`
+	body = `{"subject":{"type":"key","id":"alice"},"resource":{"type":"x5c","id":"alice","key":["` + testCertBase64 + `"]}}`
 	w = httptest.NewRecorder()
-	r2.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader(body)))
+	r2.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader(body)))
 	if !strings.Contains(w.Body.String(), "CertPool is nil") {
 		t.Errorf("Expected CertPool is nil error, got %s", w.Body.String())
 	}
 
 	// Valid JSON, cert verification failure (garbage cert)
 	garbageCert := base64.StdEncoding.EncodeToString([]byte("notacert"))
-	body = fmt.Sprintf(`{"subject":{"properties":{"x5c":["%s"]}},"resource":{},"action":{},"context":{}}`, garbageCert)
+	body = fmt.Sprintf(`{"subject":{"type":"key","id":"alice"},"resource":{"type":"x5c","id":"alice","key":["%s"]}}`, garbageCert)
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("POST", "/authzen/decision", strings.NewReader(body)))
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader(body)))
 	if !strings.Contains(w.Body.String(), "\"decision\":false") {
 		t.Errorf("Expected decision:false for cert verification failure, got %s", w.Body.String())
 	}
@@ -438,10 +447,10 @@ func TestBuildResponse(t *testing.T) {
 	if resp.Context == nil {
 		t.Errorf("Expected non-nil Context for false decision")
 	} else {
-		// Check that ReasonAdmin contains the error
-		admin, ok := resp.Context.ReasonAdmin["error"]
-		if !ok || admin != reason {
-			t.Errorf("Expected ReasonAdmin to contain error '%s', got '%v'", reason, admin)
+		// Check that Reason contains the error
+		reasonMap, ok := resp.Context.Reason["error"]
+		if !ok || reasonMap != reason {
+			t.Errorf("Expected Reason to contain error '%s', got '%v'", reason, reasonMap)
 		}
 	}
 

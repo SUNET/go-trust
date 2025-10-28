@@ -14,6 +14,7 @@ import (
 )
 
 // parseX5C extracts and parses x5c certificates from a map[string]interface{}.
+// DEPRECATED: Use parseX5CFromArray or parseX5CFromJWK for AuthZEN Trust Registry Profile compliance.
 func parseX5C(props map[string]interface{}) ([]*x509.Certificate, error) {
 	var certs []*x509.Certificate
 	if props == nil {
@@ -45,7 +46,81 @@ func parseX5C(props map[string]interface{}) ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
+// parseX5CFromArray parses X.509 certificates from an array of base64-encoded DER certificates.
+// This is used when resource.type is "x5c" in the AuthZEN Trust Registry Profile.
+// Each element in the array should be a base64-encoded X.509 DER certificate.
+func parseX5CFromArray(key []interface{}) ([]*x509.Certificate, error) {
+	var certs []*x509.Certificate
+	if len(key) == 0 {
+		return nil, fmt.Errorf("resource.key is empty")
+	}
+
+	for i, item := range key {
+		str, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("resource.key[%d] is not a string", i)
+		}
+		der, err := base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("failed to base64 decode resource.key[%d]: %v", i, err)
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate from resource.key[%d]: %v", i, err)
+		}
+		certs = append(certs, cert)
+	}
+	return certs, nil
+}
+
+// parseX5CFromJWK parses X.509 certificates from a JWK (JSON Web Key) structure.
+// This is used when resource.type is "jwk" in the AuthZEN Trust Registry Profile.
+// The JWK may contain an "x5c" claim which is an array of base64-encoded DER certificates.
+// The resource.key array should contain a single JWK object as a map[string]interface{}.
+func parseX5CFromJWK(key []interface{}) ([]*x509.Certificate, error) {
+	if len(key) == 0 {
+		return nil, fmt.Errorf("resource.key is empty")
+	}
+
+	// The first element should be a JWK object
+	jwk, ok := key[0].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("resource.key[0] is not a JWK object (map)")
+	}
+
+	// Extract x5c claim from JWK
+	x5cVal, ok := jwk["x5c"]
+	if !ok {
+		return nil, fmt.Errorf("JWK does not contain x5c claim")
+	}
+
+	x5cList, ok := x5cVal.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("JWK x5c claim is not an array")
+	}
+
+	var certs []*x509.Certificate
+	for i, item := range x5cList {
+		str, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("JWK x5c[%d] is not a string", i)
+		}
+		der, err := base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("failed to base64 decode JWK x5c[%d]: %v", i, err)
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate from JWK x5c[%d]: %v", i, err)
+		}
+		certs = append(certs, cert)
+	}
+	return certs, nil
+}
+
 // buildResponse constructs an EvaluationResponse for the AuthZEN API.
+// Per the AuthZEN Trust Registry Profile, the response format is not profiled,
+// so we use a simplified structure with reason as a general-purpose field.
 func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 	if decision {
 		return authzen.EvaluationResponse{Decision: true}
@@ -53,7 +128,7 @@ func buildResponse(decision bool, reason string) authzen.EvaluationResponse {
 	return authzen.EvaluationResponse{
 		Decision: false,
 		Context: &authzen.EvaluationResponseContext{
-			ReasonAdmin: map[string]interface{}{"error": reason},
+			Reason: map[string]interface{}{"error": reason},
 		},
 	}
 }
@@ -177,10 +252,11 @@ func NewServerContext(logger logging.Logger) *ServerContext {
 //
 // GET /info - Returns detailed summaries of all TSLs in the current pipeline context
 //
-// POST /authzen/decision - Implements the AuthZEN protocol for making trust decisions
+// POST /evaluation - Implements the AuthZEN Trust Registry Profile for validating name-to-key bindings
 //
-//	This endpoint processes AuthZEN EvaluationRequest objects containing x5c certificate
-//	chains and verifies them against the trusted certificates in the pipeline context.
+//	This endpoint processes AuthZEN EvaluationRequest objects per draft-johansson-authzen-trust,
+//	validating that a public key (in resource.key) is correctly bound to a name (in subject.id)
+//	according to the trusted certificates in the pipeline context.
 //
 // If a RateLimiter is configured in the ServerContext, it will be applied to all routes.
 func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
@@ -194,7 +270,7 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 
 	// Register API handlers
 	r.GET("/status", StatusHandler(serverCtx))
-	r.POST("/authzen/decision", AuthZENDecisionHandler(serverCtx))
+	r.POST("/evaluation", AuthZENDecisionHandler(serverCtx))
 	r.GET("/info", InfoHandler(serverCtx))
 
 	// Test-mode shutdown endpoint

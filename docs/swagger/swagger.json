@@ -22,9 +22,9 @@
     "host": "localhost:6001",
     "basePath": "/",
     "paths": {
-        "/authzen/decision": {
+        "/evaluation": {
             "post": {
-                "description": "Evaluates whether an X.509 certificate chain is trusted according to loaded TSLs\n\nThis endpoint implements the AuthZEN evaluation protocol. It accepts certificate chains\nin the x5c format (base64-encoded DER certificates) and validates them against the\ntrusted certificates loaded from ETSI TS 119612 Trust Status Lists.",
+                "description": "Evaluates whether a name-to-key binding is trusted according to loaded TSLs\n\nThis endpoint implements the AuthZEN Trust Registry Profile as specified in\ndraft-johansson-authzen-trust. It validates that a public key (in resource.key)\nis correctly bound to a name (in subject.id) according to ETSI TS 119612 Trust Status Lists.\n\nThe request MUST have:\n- subject.type = \"key\" and subject.id = the name to validate\n- resource.type = \"jwk\" or \"x5c\" with resource.key containing the public key/certificates\n- resource.id MUST equal subject.id\n- action (optional) with name = the role being validated",
                 "consumes": [
                     "application/json"
                 ],
@@ -34,10 +34,10 @@
                 "tags": [
                     "AuthZEN"
                 ],
-                "summary": "Evaluate trust decision (AuthZEN)",
+                "summary": "Evaluate trust decision (AuthZEN Trust Registry Profile)",
                 "parameters": [
                     {
-                        "description": "AuthZEN Evaluation Request",
+                        "description": "AuthZEN Trust Registry Evaluation Request",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -54,7 +54,7 @@
                         }
                     },
                     "400": {
-                        "description": "Invalid request format",
+                        "description": "Invalid request format or validation error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -235,78 +235,49 @@
                 }
             }
         },
-        "authzen.ActionEntity": {
+        "authzen.Action": {
+            "description": "Action (role) in an AuthZEN trust evaluation request",
             "type": "object",
             "properties": {
                 "name": {
-                    "description": "The name of the action being performed",
+                    "description": "The role name",
                     "type": "string",
-                    "example": "trust"
-                },
-                "properties": {
-                    "description": "Additional properties for the action",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "authzen.Entity": {
-            "description": "Entity in an AuthZEN request (subject, resource, or action)",
-            "type": "object",
-            "properties": {
-                "id": {
-                    "description": "The unique identifier for this entity",
-                    "type": "string",
-                    "example": "cert-123"
-                },
-                "properties": {
-                    "description": "Additional properties, may include X.509 certificates as \"x5c\"",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "type": {
-                    "description": "The entity type identifier",
-                    "type": "string",
-                    "example": "x509_certificate"
+                    "example": "http://ec.europa.eu/NS/wallet-provider"
                 }
             }
         },
         "authzen.EvaluationRequest": {
-            "description": "AuthZEN evaluation request for trust decision",
+            "description": "AuthZEN trust evaluation request (draft-johansson-authzen-trust)",
             "type": "object",
             "properties": {
                 "action": {
-                    "description": "The action being performed",
+                    "description": "Optional role constraint",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/authzen.ActionEntity"
+                            "$ref": "#/definitions/authzen.Action"
                         }
                     ]
                 },
                 "context": {
-                    "description": "Additional contextual information",
+                    "description": "Optional context (MUST NOT be critical)",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "resource": {
-                    "description": "The entity being acted upon",
+                    "description": "The public key to be validated",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/authzen.Entity"
+                            "$ref": "#/definitions/authzen.Resource"
                         }
                     ]
                 },
                 "subject": {
-                    "description": "The entity attempting to perform an action",
+                    "description": "The name to be bound to the key",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/authzen.Entity"
+                            "$ref": "#/definitions/authzen.Subject"
                         }
                     ]
                 }
@@ -325,27 +296,63 @@
                     ]
                 },
                 "decision": {
-                    "description": "Whether the action is permitted (true) or denied (false)",
+                    "description": "Whether the name-to-key binding is authorized",
                     "type": "boolean",
                     "example": true
                 }
             }
         },
         "authzen.EvaluationResponseContext": {
+            "description": "Context information for evaluation response",
             "type": "object",
             "properties": {
                 "id": {
-                    "description": "An optional identifier for the decision",
+                    "description": "Optional identifier for the decision",
                     "type": "string",
                     "example": "decision-123"
                 },
-                "reason_admin": {
-                    "description": "Detailed reason for administrators",
+                "reason": {
+                    "description": "Reason information (user or admin)",
                     "type": "object"
+                }
+            }
+        },
+        "authzen.Resource": {
+            "description": "Resource (public key) in an AuthZEN trust evaluation request",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "MUST match subject.id",
+                    "type": "string",
+                    "example": "did:example:123"
                 },
-                "reason_user": {
-                    "description": "User-friendly reason message",
-                    "type": "object"
+                "key": {
+                    "description": "Public key data (JWK object or x5c array)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "type": {
+                    "description": "MUST be \"jwk\" or \"x5c\"",
+                    "type": "string",
+                    "example": "x5c"
+                }
+            }
+        },
+        "authzen.Subject": {
+            "description": "Subject in an AuthZEN trust evaluation request",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "The name bound to the public key",
+                    "type": "string",
+                    "example": "did:example:123"
+                },
+                "type": {
+                    "description": "MUST be \"key\"",
+                    "type": "string",
+                    "example": "key"
                 }
             }
         }

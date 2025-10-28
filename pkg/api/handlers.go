@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"crypto/x509"
+
 	"github.com/SUNET/go-trust/pkg/authzen"
 	"github.com/SUNET/go-trust/pkg/logging"
 	"github.com/gin-gonic/gin"
@@ -40,19 +41,25 @@ func StatusHandler(serverCtx *ServerContext) gin.HandlerFunc {
 }
 
 // AuthZENDecisionHandler godoc
-// @Summary Evaluate trust decision (AuthZEN)
-// @Description Evaluates whether an X.509 certificate chain is trusted according to loaded TSLs
+// @Summary Evaluate trust decision (AuthZEN Trust Registry Profile)
+// @Description Evaluates whether a name-to-key binding is trusted according to loaded TSLs
 // @Description
-// @Description This endpoint implements the AuthZEN evaluation protocol. It accepts certificate chains
-// @Description in the x5c format (base64-encoded DER certificates) and validates them against the
-// @Description trusted certificates loaded from ETSI TS 119612 Trust Status Lists.
+// @Description This endpoint implements the AuthZEN Trust Registry Profile as specified in
+// @Description draft-johansson-authzen-trust. It validates that a public key (in resource.key)
+// @Description is correctly bound to a name (in subject.id) according to ETSI TS 119612 Trust Status Lists.
+// @Description
+// @Description The request MUST have:
+// @Description - subject.type = "key" and subject.id = the name to validate
+// @Description - resource.type = "jwk" or "x5c" with resource.key containing the public key/certificates
+// @Description - resource.id MUST equal subject.id
+// @Description - action (optional) with name = the role being validated
 // @Tags AuthZEN
 // @Accept json
 // @Produce json
-// @Param request body authzen.EvaluationRequest true "AuthZEN Evaluation Request"
+// @Param request body authzen.EvaluationRequest true "AuthZEN Trust Registry Evaluation Request"
 // @Success 200 {object} authzen.EvaluationResponse "Trust decision (decision=true for trusted, false for untrusted)"
-// @Failure 400 {object} map[string]string "Invalid request format"
-// @Router /authzen/decision [post]
+// @Failure 400 {object} map[string]string "Invalid request format or validation error"
+// @Router /evaluation [post]
 func AuthZENDecisionHandler(serverCtx *ServerContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req authzen.EvaluationRequest
@@ -65,92 +72,100 @@ func AuthZENDecisionHandler(serverCtx *ServerContext) gin.HandlerFunc {
 			return
 		}
 
+		// Validate request against AuthZEN Trust Registry Profile
+		if err := req.Validate(); err != nil {
+			serverCtx.Logger.Error("AuthZEN request validation failed",
+				logging.F("remote_ip", c.ClientIP()),
+				logging.F("error", err.Error()))
+			c.JSON(400, gin.H{"error": fmt.Sprintf("validation error: %v", err)})
+			return
+		}
+
 		// Log valid request
 		serverCtx.Logger.Debug("Processing AuthZEN request",
-			logging.F("remote_ip", c.ClientIP()))
+			logging.F("remote_ip", c.ClientIP()),
+			logging.F("subject_id", req.Subject.ID),
+			logging.F("resource_type", req.Resource.Type))
 
-		// Try to extract x5c from subject, resource, action, and context
-		var allCerts []*x509.Certificate
+		// Extract certificates from resource.key based on resource.type
+		var certs []*x509.Certificate
 		var parseErr error
-		subjectCerts, err := parseX5C(req.Subject.Properties)
-		if err != nil {
-			parseErr = fmt.Errorf("subject x5c: %v", err)
-		}
-		allCerts = append(allCerts, subjectCerts...)
-		resourceCerts, err := parseX5C(req.Resource.Properties)
-		if err != nil && parseErr == nil {
-			parseErr = fmt.Errorf("resource x5c: %v", err)
-		}
-		allCerts = append(allCerts, resourceCerts...)
-		actionCerts, err := parseX5C(req.Action.Properties)
-		if err != nil && parseErr == nil {
-			parseErr = fmt.Errorf("action x5c: %v", err)
-		}
-		allCerts = append(allCerts, actionCerts...)
-		contextCerts, err := parseX5C(req.Context)
-		if err != nil && parseErr == nil {
-			parseErr = fmt.Errorf("context x5c: %v", err)
-		}
-		allCerts = append(allCerts, contextCerts...)
 
-		// If any x5c parse error, return error in AuthZEN-compatible response
+		if req.Resource.Type == "x5c" {
+			// resource.key is an array of base64-encoded X.509 certificates
+			certs, parseErr = parseX5CFromArray(req.Resource.Key)
+		} else {
+			// resource.type == "jwk" - extract certificate from JWK x5c claim
+			certs, parseErr = parseX5CFromJWK(req.Resource.Key)
+		}
+
 		if parseErr != nil {
 			serverCtx.Logger.Error("AuthZEN certificate parsing error",
 				logging.F("remote_ip", c.ClientIP()),
+				logging.F("resource_type", req.Resource.Type),
 				logging.F("error", parseErr.Error()))
 			c.JSON(200, buildResponse(false, parseErr.Error()))
 			return
 		}
 
-		if len(allCerts) > 0 {
-			serverCtx.RLock()
-			certPool := serverCtx.PipelineContext.CertPool
-			serverCtx.RUnlock()
-			if certPool != nil {
-				start := time.Now()
-				opts := x509.VerifyOptions{
-					Roots: certPool,
-				}
-				_, err := allCerts[0].Verify(opts)
-				validationDuration := time.Since(start)
+		if len(certs) == 0 {
+			serverCtx.Logger.Error("AuthZEN request has no certificates",
+				logging.F("remote_ip", c.ClientIP()),
+				logging.F("resource_type", req.Resource.Type))
+			c.JSON(200, buildResponse(false, "no certificates found in resource.key"))
+			return
+		}
 
-				if err == nil {
-					serverCtx.Logger.Info("AuthZEN request approved",
-						logging.F("remote_ip", c.ClientIP()),
-						logging.F("subject", req.Subject.ID))
+		// Validate certificate chain against TSL certificate pool
+		serverCtx.RLock()
+		certPool := serverCtx.PipelineContext.CertPool
+		serverCtx.RUnlock()
 
-					// Record successful validation metrics
-					if serverCtx.Metrics != nil {
-						serverCtx.Metrics.RecordCertValidation(validationDuration, true)
-					}
+		if certPool == nil {
+			serverCtx.Logger.Error("AuthZEN request failed - CertPool is nil",
+				logging.F("remote_ip", c.ClientIP()))
 
-					c.JSON(200, buildResponse(true, ""))
-				} else {
-					serverCtx.Logger.Info("AuthZEN request denied",
-						logging.F("remote_ip", c.ClientIP()),
-						logging.F("subject", req.Subject.ID),
-						logging.F("error", err.Error()))
-
-					// Record failed validation metrics
-					if serverCtx.Metrics != nil {
-						serverCtx.Metrics.RecordCertValidation(validationDuration, false)
-					}
-
-					c.JSON(200, buildResponse(false, err.Error()))
-				}
-				return
-			} else {
-				serverCtx.Logger.Error("AuthZEN request failed - CertPool is nil",
-					logging.F("remote_ip", c.ClientIP()))
-
-				// Record error metrics
-				if serverCtx.Metrics != nil {
-					serverCtx.Metrics.RecordError("certpool_nil", "authzen_decision")
-				}
-
-				c.JSON(200, buildResponse(false, "CertPool is nil"))
-				return
+			// Record error metrics
+			if serverCtx.Metrics != nil {
+				serverCtx.Metrics.RecordError("certpool_nil", "authzen_decision")
 			}
+
+			c.JSON(200, buildResponse(false, "CertPool is nil"))
+			return
+		}
+
+		start := time.Now()
+		opts := x509.VerifyOptions{
+			Roots: certPool,
+		}
+		_, err := certs[0].Verify(opts)
+		validationDuration := time.Since(start)
+
+		if err == nil {
+			serverCtx.Logger.Info("AuthZEN request approved",
+				logging.F("remote_ip", c.ClientIP()),
+				logging.F("subject_id", req.Subject.ID),
+				logging.F("resource_type", req.Resource.Type))
+
+			// Record successful validation metrics
+			if serverCtx.Metrics != nil {
+				serverCtx.Metrics.RecordCertValidation(validationDuration, true)
+			}
+
+			c.JSON(200, buildResponse(true, ""))
+		} else {
+			serverCtx.Logger.Info("AuthZEN request denied",
+				logging.F("remote_ip", c.ClientIP()),
+				logging.F("subject_id", req.Subject.ID),
+				logging.F("resource_type", req.Resource.Type),
+				logging.F("error", err.Error()))
+
+			// Record failed validation metrics
+			if serverCtx.Metrics != nil {
+				serverCtx.Metrics.RecordCertValidation(validationDuration, false)
+			}
+
+			c.JSON(200, buildResponse(false, err.Error()))
 		}
 	}
 }

@@ -1,48 +1,101 @@
 // Package authzen provides types and functions for the AuthZEN protocol.
 // AuthZEN is an authorization protocol that allows for policy decisions
 // based on subject, resource, action, and context information.
+//
+// This implementation follows the AuthZEN Trust Registry Profile as specified in
+// draft-johansson-authzen-trust: https://leifj.github.io/draft-johansson-authzen-trust/
 package authzen
 
-// Entity represents a component in an AuthZEN evaluation request.
-// It's used to represent subjects (who is performing the action),
-// resources (what is being accessed), and can include properties like X.509 certificates.
-// @Description Entity in an AuthZEN request (subject, resource, or action)
-type Entity struct {
-	Type       string                 `json:"type" example:"x509_certificate"`                  // The entity type identifier
-	ID         string                 `json:"id" example:"cert-123"`                            // The unique identifier for this entity
-	Properties map[string]interface{} `json:"properties,omitempty" swaggertype:"object,string"` // Additional properties, may include X.509 certificates as "x5c"
+import "fmt"
+
+// Subject represents the name part of the name-to-key binding in a trust evaluation request.
+// According to the AuthZEN Trust Registry Profile:
+// - type MUST be the constant string "key"
+// - id MUST be the name bound to the public key to be validated
+// @Description Subject in an AuthZEN trust evaluation request
+type Subject struct {
+	Type string `json:"type" example:"key"`           // MUST be "key"
+	ID   string `json:"id" example:"did:example:123"` // The name bound to the public key
 }
 
-// EvaluationRequest represents an authorization decision request in the AuthZEN protocol.
-// It follows the structure defined in the AuthZEN evaluation-request.schema.json schema.
-// This request carries all information needed to make an authorization decision,
-// including X.509 certificates that may be present in the properties or context.
-// @Description AuthZEN evaluation request for trust decision
+// Resource represents the public key part of the name-to-key binding in a trust evaluation request.
+// According to the AuthZEN Trust Registry Profile:
+// - type MUST be one of "jwk" or "x5c"
+// - id MUST be the same as subject.id
+// - key MUST contain the public key in the format specified by type
+// @Description Resource (public key) in an AuthZEN trust evaluation request
+type Resource struct {
+	Type string        `json:"type" example:"x5c"`             // MUST be "jwk" or "x5c"
+	ID   string        `json:"id" example:"did:example:123"`   // MUST match subject.id
+	Key  []interface{} `json:"key" swaggertype:"array,string"` // Public key data (JWK object or x5c array)
+}
+
+// Action represents the role associated with the name-to-key binding.
+// This is optional and used to distinguish different uses of the same name-to-key binding.
+// For example, to authorize that an X.509 certificate is allowed to act as a TLS server
+// or as a digital credential issuer.
+// @Description Action (role) in an AuthZEN trust evaluation request
+type Action struct {
+	Name string `json:"name" example:"http://ec.europa.eu/NS/wallet-provider"` // The role name
+}
+
+// EvaluationRequest represents a trust evaluation request according to the AuthZEN Trust Registry Profile.
+// The client (PEP) requests that the server (PDP) authorizes the binding between the name
+// specified by Subject and the public key specified by Resource. Optionally, Action constrains
+// the authorization to a specific role.
+// @Description AuthZEN trust evaluation request (draft-johansson-authzen-trust)
 type EvaluationRequest struct {
-	Subject  Entity                 `json:"subject"`                                       // The entity attempting to perform an action
-	Resource Entity                 `json:"resource"`                                      // The entity being acted upon
-	Action   ActionEntity           `json:"action"`                                        // The action being performed
-	Context  map[string]interface{} `json:"context,omitempty" swaggertype:"object,string"` // Additional contextual information
-}
-
-// ActionEntity represents the action in an AuthZEN request
-type ActionEntity struct {
-	Name       string                 `json:"name" example:"trust"`                             // The name of the action being performed
-	Properties map[string]interface{} `json:"properties,omitempty" swaggertype:"object,string"` // Additional properties for the action
+	Subject  Subject                `json:"subject"`                                       // The name to be bound to the key
+	Resource Resource               `json:"resource"`                                      // The public key to be validated
+	Action   *Action                `json:"action,omitempty"`                              // Optional role constraint
+	Context  map[string]interface{} `json:"context,omitempty" swaggertype:"object,string"` // Optional context (MUST NOT be critical)
 }
 
 // EvaluationResponse represents the authorization decision response in the AuthZEN protocol.
-// It follows the structure defined in the AuthZEN evaluation-response.schema.json schema.
-// The response contains a boolean decision and optional context with reasons for the decision.
+// This profile does not constrain or profile the standard AuthZEN response message format.
 // @Description AuthZEN evaluation response with trust decision
 type EvaluationResponse struct {
-	Decision bool                       `json:"decision" example:"true"` // Whether the action is permitted (true) or denied (false)
+	Decision bool                       `json:"decision" example:"true"` // Whether the name-to-key binding is authorized
 	Context  *EvaluationResponseContext `json:"context,omitempty"`       // Optional context with decision details
 }
 
 // EvaluationResponseContext contains additional information about an authorization decision
+// @Description Context information for evaluation response
 type EvaluationResponseContext struct {
-	ID          string                 `json:"id" example:"decision-123"`                   // An optional identifier for the decision
-	ReasonAdmin map[string]interface{} `json:"reason_admin,omitempty" swaggertype:"object"` // Detailed reason for administrators
-	ReasonUser  map[string]interface{} `json:"reason_user,omitempty" swaggertype:"object"`  // User-friendly reason message
+	ID     string                 `json:"id,omitempty" example:"decision-123"`   // Optional identifier for the decision
+	Reason map[string]interface{} `json:"reason,omitempty" swaggertype:"object"` // Reason information (user or admin)
+}
+
+// Validate checks if the EvaluationRequest is compliant with the AuthZEN Trust Registry Profile.
+// Returns an error if the request doesn't meet the specification requirements.
+func (r *EvaluationRequest) Validate() error {
+	// Subject.type MUST be "key"
+	if r.Subject.Type != "key" {
+		return fmt.Errorf("subject.type must be 'key', got '%s'", r.Subject.Type)
+	}
+
+	// Subject.id MUST be present
+	if r.Subject.ID == "" {
+		return fmt.Errorf("subject.id must be present")
+	}
+
+	// Resource.type MUST be "jwk" or "x5c"
+	if r.Resource.Type != "jwk" && r.Resource.Type != "x5c" {
+		return fmt.Errorf("resource.type must be 'jwk' or 'x5c', got '%s'", r.Resource.Type)
+	}
+
+	// Resource.id MUST be present and MUST match subject.id
+	if r.Resource.ID == "" {
+		return fmt.Errorf("resource.id must be present")
+	}
+	if r.Resource.ID != r.Subject.ID {
+		return fmt.Errorf("resource.id (%s) must match subject.id (%s)", r.Resource.ID, r.Subject.ID)
+	}
+
+	// Resource.key MUST be present
+	if len(r.Resource.Key) == 0 {
+		return fmt.Errorf("resource.key must be present and non-empty")
+	}
+
+	return nil
 }

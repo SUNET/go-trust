@@ -22,55 +22,34 @@ definitions:
       tsl_count:
         type: integer
     type: object
-  authzen.ActionEntity:
+  authzen.Action:
+    description: Action (role) in an AuthZEN trust evaluation request
     properties:
       name:
-        description: The name of the action being performed
-        example: trust
-        type: string
-      properties:
-        additionalProperties:
-          type: string
-        description: Additional properties for the action
-        type: object
-    type: object
-  authzen.Entity:
-    description: Entity in an AuthZEN request (subject, resource, or action)
-    properties:
-      id:
-        description: The unique identifier for this entity
-        example: cert-123
-        type: string
-      properties:
-        additionalProperties:
-          type: string
-        description: Additional properties, may include X.509 certificates as "x5c"
-        type: object
-      type:
-        description: The entity type identifier
-        example: x509_certificate
+        description: The role name
+        example: http://ec.europa.eu/NS/wallet-provider
         type: string
     type: object
   authzen.EvaluationRequest:
-    description: AuthZEN evaluation request for trust decision
+    description: AuthZEN trust evaluation request (draft-johansson-authzen-trust)
     properties:
       action:
         allOf:
-        - $ref: '#/definitions/authzen.ActionEntity'
-        description: The action being performed
+        - $ref: '#/definitions/authzen.Action'
+        description: Optional role constraint
       context:
         additionalProperties:
           type: string
-        description: Additional contextual information
+        description: Optional context (MUST NOT be critical)
         type: object
       resource:
         allOf:
-        - $ref: '#/definitions/authzen.Entity'
-        description: The entity being acted upon
+        - $ref: '#/definitions/authzen.Resource'
+        description: The public key to be validated
       subject:
         allOf:
-        - $ref: '#/definitions/authzen.Entity'
-        description: The entity attempting to perform an action
+        - $ref: '#/definitions/authzen.Subject'
+        description: The name to be bound to the key
     type: object
   authzen.EvaluationResponse:
     description: AuthZEN evaluation response with trust decision
@@ -80,22 +59,49 @@ definitions:
         - $ref: '#/definitions/authzen.EvaluationResponseContext'
         description: Optional context with decision details
       decision:
-        description: Whether the action is permitted (true) or denied (false)
+        description: Whether the name-to-key binding is authorized
         example: true
         type: boolean
     type: object
   authzen.EvaluationResponseContext:
+    description: Context information for evaluation response
     properties:
       id:
-        description: An optional identifier for the decision
+        description: Optional identifier for the decision
         example: decision-123
         type: string
-      reason_admin:
-        description: Detailed reason for administrators
+      reason:
+        description: Reason information (user or admin)
         type: object
-      reason_user:
-        description: User-friendly reason message
-        type: object
+    type: object
+  authzen.Resource:
+    description: Resource (public key) in an AuthZEN trust evaluation request
+    properties:
+      id:
+        description: MUST match subject.id
+        example: did:example:123
+        type: string
+      key:
+        description: Public key data (JWK object or x5c array)
+        items:
+          type: string
+        type: array
+      type:
+        description: MUST be "jwk" or "x5c"
+        example: x5c
+        type: string
+    type: object
+  authzen.Subject:
+    description: Subject in an AuthZEN trust evaluation request
+    properties:
+      id:
+        description: The name bound to the public key
+        example: did:example:123
+        type: string
+      type:
+        description: MUST be "key"
+        example: key
+        type: string
     type: object
 host: localhost:6001
 info:
@@ -115,18 +121,24 @@ info:
   title: Go-Trust API
   version: "1.0"
 paths:
-  /authzen/decision:
+  /evaluation:
     post:
       consumes:
       - application/json
       description: |-
-        Evaluates whether an X.509 certificate chain is trusted according to loaded TSLs
+        Evaluates whether a name-to-key binding is trusted according to loaded TSLs
 
-        This endpoint implements the AuthZEN evaluation protocol. It accepts certificate chains
-        in the x5c format (base64-encoded DER certificates) and validates them against the
-        trusted certificates loaded from ETSI TS 119612 Trust Status Lists.
+        This endpoint implements the AuthZEN Trust Registry Profile as specified in
+        draft-johansson-authzen-trust. It validates that a public key (in resource.key)
+        is correctly bound to a name (in subject.id) according to ETSI TS 119612 Trust Status Lists.
+
+        The request MUST have:
+        - subject.type = "key" and subject.id = the name to validate
+        - resource.type = "jwk" or "x5c" with resource.key containing the public key/certificates
+        - resource.id MUST equal subject.id
+        - action (optional) with name = the role being validated
       parameters:
-      - description: AuthZEN Evaluation Request
+      - description: AuthZEN Trust Registry Evaluation Request
         in: body
         name: request
         required: true
@@ -140,12 +152,12 @@ paths:
           schema:
             $ref: '#/definitions/authzen.EvaluationResponse'
         "400":
-          description: Invalid request format
+          description: Invalid request format or validation error
           schema:
             additionalProperties:
               type: string
             type: object
-      summary: Evaluate trust decision (AuthZEN)
+      summary: Evaluate trust decision (AuthZEN Trust Registry Profile)
       tags:
       - AuthZEN
   /health:
