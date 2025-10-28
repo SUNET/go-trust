@@ -220,6 +220,34 @@ func InfoHandler(serverCtx *ServerContext) gin.HandlerFunc {
 	}
 }
 
+// WellKnownHandler godoc
+// @Summary AuthZEN PDP discovery endpoint
+// @Description Returns Policy Decision Point metadata according to Section 9 of the AuthZEN specification
+// @Description This endpoint provides service discovery information including supported endpoints and capabilities
+// @Description per RFC 8615 well-known URI registration
+// @Tags AuthZEN
+// @Produce json
+// @Success 200 {object} authzen.PDPMetadata "PDP metadata"
+// @Router /.well-known/authzen-configuration [get]
+func WellKnownHandler(baseURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Construct metadata according to AuthZEN spec Section 9.1
+		metadata := authzen.PDPMetadata{
+			PolicyDecisionPoint:      baseURL,
+			AccessEvaluationEndpoint: baseURL + "/evaluation",
+			// Optional endpoints - not implemented yet
+			// AccessEvaluationsEndpoint: baseURL + "/evaluations",
+			// SearchSubjectEndpoint: baseURL + "/search/subject",
+			// SearchResourceEndpoint: baseURL + "/search/resource",
+			// SearchActionEndpoint: baseURL + "/search/action",
+			// Capabilities: []string{}, // Could list custom capabilities here
+		}
+
+		// Return metadata with proper Content-Type
+		c.JSON(200, metadata)
+	}
+}
+
 // TestShutdownHandler godoc (test mode only)
 func TestShutdownHandler(serverCtx *ServerContext) gin.HandlerFunc {
 	return func(c *gin.Context) {

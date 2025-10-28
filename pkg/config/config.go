@@ -24,9 +24,10 @@ type Config struct {
 
 // ServerConfig contains HTTP server configuration settings.
 type ServerConfig struct {
-	Host      string        `yaml:"host"`
-	Port      string        `yaml:"port"`
-	Frequency time.Duration `yaml:"frequency"`
+	Host        string        `yaml:"host"`
+	Port        string        `yaml:"port"`
+	Frequency   time.Duration `yaml:"frequency"`
+	ExternalURL string        `yaml:"external_url"` // External URL for PDP discovery (e.g., https://pdp.example.com)
 }
 
 // LoggingConfig contains logging configuration settings.

@@ -248,6 +248,8 @@ func NewServerContext(logger logging.Logger) *ServerContext {
 // RegisterAPIRoutes registers all API endpoints on the given Gin router using ServerContext.
 // It sets up the following endpoints:
 //
+// GET /.well-known/authzen-configuration - Returns PDP metadata for service discovery (AuthZEN spec Section 9)
+//
 // GET /status - Returns the current server status including TSL count and last processing time
 //
 // GET /info - Returns detailed summaries of all TSLs in the current pipeline context
@@ -267,6 +269,9 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 			logging.F("rps", serverCtx.RateLimiter.rps),
 			logging.F("burst", serverCtx.RateLimiter.burst))
 	}
+
+	// AuthZEN well-known discovery endpoint (Section 9 of base spec)
+	r.GET("/.well-known/authzen-configuration", WellKnownHandler(serverCtx.BaseURL))
 
 	// Register API handlers
 	r.GET("/status", StatusHandler(serverCtx))

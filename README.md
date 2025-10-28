@@ -24,6 +24,8 @@ Go-Trust is a local trust engine that provides trust decisions based on ETSI TS 
 
 Go-Trust is not meant to be used across trust boundaries. The reason for creating Go-Trust is to promote interoperability across implementations that rely on ETSI trust status lists such as the EUDI wallet. ETSI TS 119 612 is complex to implement correctly and hopefully Go-Trust provides a way to both ensure correct trust evaluation as well as provide performance enhancements by allowing for local caching etc. Go-Trust is an API service meant to be run inside the same trust domain as the entity that relies on trust evaluation (for instance a wallet unit or an issuer).
 
+Future versions of Go-Trust will expand to cover other trust registries.
+
 Go-Trust can also be used to maintain and publish ETSI trust status lists, act as a local distribution point and provide policy based transformation of trust status lists.
 
 The design was inspired by the pyFF project which has been used to provide similar functions for SAML metadata at scale.
@@ -344,10 +346,11 @@ The service exposes several HTTP endpoints:
 
 - **GET /status**: Check service health status and loaded TSL count
 - **GET /info**: Get detailed information about loaded TSLs
+- **GET /.well-known/authzen-configuration**: AuthZEN PDP discovery endpoint (RFC 8615)
 
 #### Trust Decisions
 
-- **POST /authzen/decision**: Evaluate trust decisions for X509 certificates
+- **POST /evaluation**: Evaluate trust decisions for X509 certificates (AuthZEN Trust Registry Profile)
 
 The health endpoints follow Kubernetes best practices:
 - **Liveness** checks if the service is alive (restarts unhealthy containers)
@@ -520,14 +523,45 @@ The application is configured using command-line flags:
 ```bash
 # Start the API server with custom settings
 ./gt --host 0.0.0.0 --port 8080 --frequency 1h ./path/to/pipeline.yaml
+
+# Configure external URL for AuthZEN discovery (production deployments)
+./gt --external-url https://pdp.example.com ./path/to/pipeline.yaml
 ```
 
 Available command-line options:
 - `--host`: API server hostname (default: 127.0.0.1)
 - `--port`: API server port (default: 6001)
+- `--external-url`: External URL for PDP discovery (e.g., https://pdp.example.com)
 - `--frequency`: Pipeline update frequency (default: 5m)
 - `--help`: Show help message
 - `--version`: Show version information
+
+### External URL Configuration
+
+When deploying behind a reverse proxy or load balancer, configure the external URL for proper AuthZEN discovery:
+
+**Command-line flag:**
+```bash
+./gt --external-url https://pdp.example.com pipeline.yaml
+```
+
+**Environment variable:**
+```bash
+export GO_TRUST_EXTERNAL_URL=https://pdp.example.com
+./gt pipeline.yaml
+```
+
+**Priority order:** CLI flag > Environment variable > Default (http://host:port)
+
+The `.well-known/authzen-configuration` endpoint will return the configured external URL:
+```json
+{
+  "policy_decision_point": "https://pdp.example.com",
+  "access_evaluation_endpoint": "https://pdp.example.com/evaluation"
+}
+```
+
+See `example/authzen-discovery.yaml` for a complete configuration example.
 ```
 
 ## Development

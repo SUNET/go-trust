@@ -54,6 +54,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  --version      Show version information and exit.")
 	fmt.Fprintln(os.Stderr, "  --host         API server hostname (default: 127.0.0.1)")
 	fmt.Fprintln(os.Stderr, "  --port         API server port (default: 6001)")
+	fmt.Fprintln(os.Stderr, "  --external-url External URL for PDP discovery (e.g., https://pdp.example.com)")
+	fmt.Fprintln(os.Stderr, "                 Can also be set via GO_TRUST_EXTERNAL_URL environment variable")
 	fmt.Fprintln(os.Stderr, "  --frequency    Pipeline update frequency (default: 5m)")
 	fmt.Fprintln(os.Stderr, "")
 }
@@ -63,6 +65,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "Show version information")
 	host := flag.String("host", "127.0.0.1", "API server hostname")
 	port := flag.String("port", "6001", "API server port")
+	externalURL := flag.String("external-url", "", "External URL for PDP discovery (e.g., https://pdp.example.com)")
 	freq := flag.Duration("frequency", 5*time.Minute, "Pipeline update frequency (e.g. 10s, 1m, 5m)")
 	flag.Parse()
 
@@ -89,9 +92,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	serverCtx := &api.ServerContext{
-		PipelineContext: &pipeline.Context{},
+	serverCtx := api.NewServerContext(nil) // Creates ServerContext with default logger
+	serverCtx.PipelineContext = &pipeline.Context{}
+
+	// Set BaseURL for .well-known discovery
+	// Priority: 1) --external-url flag, 2) GO_TRUST_EXTERNAL_URL env var, 3) local host:port
+	baseURL := *externalURL
+	if baseURL == "" {
+		baseURL = os.Getenv("GO_TRUST_EXTERNAL_URL")
 	}
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("http://%s:%s", *host, *port)
+	}
+	serverCtx.BaseURL = baseURL
 
 	// Start background updater
 	api.StartBackgroundUpdater(pl, serverCtx, *freq)

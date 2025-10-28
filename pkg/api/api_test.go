@@ -233,6 +233,7 @@ func setupTestServer() (*gin.Engine, *ServerContext) {
 		PipelineContext: ctx,
 		LastProcessed:   time.Now(),
 		Logger:          logging.DefaultLogger(), // Initialize logger to prevent nil pointer panics
+		BaseURL:         "http://localhost:6001", // Default base URL for tests
 	}
 	// Store the certBase64 for use in tests
 	RegisterAPIRoutes(r, serverCtx)
@@ -317,6 +318,56 @@ func TestInfoEndpoint_NilAndMixedTSLs(t *testing.T) {
 	// Check that dummy TSL summary fields are present
 	assert.Contains(t, body, "scheme_operator_name")
 	assert.Contains(t, body, "num_trust_service_providers")
+}
+
+func TestWellKnownEndpoint(t *testing.T) {
+	r, serverCtx := setupTestServer()
+
+	// Set a base URL for the PDP
+	serverCtx.Lock()
+	serverCtx.BaseURL = "http://localhost:6001"
+	serverCtx.Unlock()
+
+	req, _ := http.NewRequest("GET", "/.well-known/authzen-configuration", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "application/json; charset=utf-8", w.Header().Get("Content-Type"))
+
+	body := w.Body.String()
+	// Verify required fields according to AuthZEN spec Section 9.1
+	assert.Contains(t, body, "policy_decision_point")
+	assert.Contains(t, body, "access_evaluation_endpoint")
+	assert.Contains(t, body, "http://localhost:6001")
+	assert.Contains(t, body, "/evaluation")
+}
+
+func TestWellKnownEndpoint_ExternalURL(t *testing.T) {
+	// Test with external URL (e.g., production deployment behind reverse proxy)
+	_, serverCtx := setupTestServer()
+
+	// Simulate setting external URL (like from --external-url flag or env var)
+	externalURL := "https://pdp.example.com"
+	serverCtx.Lock()
+	serverCtx.BaseURL = externalURL
+	serverCtx.Unlock()
+
+	// Re-register routes with new BaseURL
+	r2 := gin.New()
+	RegisterAPIRoutes(r2, serverCtx)
+
+	req, _ := http.NewRequest("GET", "/.well-known/authzen-configuration", nil)
+	w := httptest.NewRecorder()
+	r2.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	body := w.Body.String()
+
+	// Verify external URL is used
+	assert.Contains(t, body, "https://pdp.example.com")
+	assert.Contains(t, body, "https://pdp.example.com/evaluation")
+	assert.NotContains(t, body, "localhost")
 }
 
 func TestAuthzenDecisionEndpoint(t *testing.T) {

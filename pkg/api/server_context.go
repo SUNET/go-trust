@@ -22,6 +22,7 @@ type ServerContext struct {
 	Logger          logging.Logger    // Logger for API operations (never nil)
 	RateLimiter     *RateLimiter      // Rate limiter for API endpoints (optional)
 	Metrics         *Metrics          // Prometheus metrics (optional)
+	BaseURL         string            // Base URL for the PDP (e.g., "https://pdp.example.com") for .well-known discovery
 }
 
 // Lock locks the ServerContext for writing.

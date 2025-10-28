@@ -99,3 +99,36 @@ func (r *EvaluationRequest) Validate() error {
 
 	return nil
 }
+
+// PDPMetadata represents Policy Decision Point metadata as defined in Section 9 of the
+// AuthZEN base specification. This metadata is served at the .well-known discovery endpoint.
+// @Description Policy Decision Point metadata for service discovery
+type PDPMetadata struct {
+	// REQUIRED. The Policy Decision Point identifier, which is a URL that uses the
+	// "https" scheme and has no query or fragment components. This is used to prevent
+	// PDP mix-up attacks.
+	PolicyDecisionPoint string `json:"policy_decision_point" example:"https://pdp.example.com"`
+
+	// REQUIRED. URL of Access Evaluation API endpoint
+	AccessEvaluationEndpoint string `json:"access_evaluation_endpoint" example:"https://pdp.example.com/evaluation"`
+
+	// OPTIONAL. URL of Access Evaluations API endpoint (for batch requests)
+	AccessEvaluationsEndpoint string `json:"access_evaluations_endpoint,omitempty" example:"https://pdp.example.com/evaluations"`
+
+	// OPTIONAL. URL of Search API endpoint for subject entities
+	SearchSubjectEndpoint string `json:"search_subject_endpoint,omitempty" example:"https://pdp.example.com/search/subject"`
+
+	// OPTIONAL. URL of Search API endpoint for resource entities
+	SearchResourceEndpoint string `json:"search_resource_endpoint,omitempty" example:"https://pdp.example.com/search/resource"`
+
+	// OPTIONAL. URL of Search API endpoint for action entities
+	SearchActionEndpoint string `json:"search_action_endpoint,omitempty" example:"https://pdp.example.com/search/action"`
+
+	// OPTIONAL. JSON array containing a list of registered IANA URNs referencing PDP
+	// specific capabilities.
+	Capabilities []string `json:"capabilities,omitempty" swaggertype:"array,string"`
+
+	// OPTIONAL. A JWT containing metadata parameters about the protected resource as claims.
+	// This provides signed metadata that takes precedence over plain JSON metadata.
+	SignedMetadata string `json:"signed_metadata,omitempty"`
+}
