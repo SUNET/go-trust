@@ -57,6 +57,63 @@ The design was inspired by the pyFF project which has been used to provide simil
 - **Linting**: Multiple linters (golangci-lint, gosec, staticcheck)
 - **CI/CD**: Automated testing, coverage tracking, and security scanning
 
+## Architecture
+
+### Multi-Registry Design
+
+Go-Trust implements a flexible multi-registry architecture that allows multiple trust frameworks to be queried simultaneously for optimal performance and interoperability.
+
+#### Registry Abstraction
+
+The core `TrustRegistry` interface enables pluggable trust resolution backends:
+
+```go
+type TrustRegistry interface {
+    Evaluate(ctx context.Context, req *authzen.EvaluationRequest) (*authzen.EvaluationResponse, error)
+    SupportedResourceTypes() []string
+    Info() RegistryInfo
+    Healthy() bool
+    Refresh(ctx context.Context) error
+}
+```
+
+Current implementations:
+- **ETSI TSL Registry**: Validates X.509 certificates against ETSI TS 119 612 Trust Status Lists
+- **OpenID Federation**: *(planned)* Entity resolution and trust chain validation
+- **DID Methods**: *(planned)* Decentralized identifier resolution
+
+#### Resolution Strategies
+
+The `RegistryManager` coordinates multiple registries using configurable strategies:
+
+- **FirstMatch** (default): Parallel queries return first positive match (fastest)
+- **AllRegistries**: Query all registries and aggregate results (auditing)
+- **BestMatch**: Select highest confidence match from all results
+- **Sequential**: Try registries in order until success (rate-limited APIs)
+
+#### Circuit Breaker Pattern
+
+Built-in circuit breakers prevent cascade failures:
+- Automatic failure detection (5 failures trigger open circuit)
+- Configurable reset timeout (default: 30s)
+- Per-registry health tracking
+
+#### Code Organization
+
+The registry package is organized for clarity and maintainability:
+
+```
+pkg/registry/
+├── interface.go      # TrustRegistry interface and type definitions
+├── manager.go        # RegistryManager orchestration logic
+├── strategies.go     # Resolution strategy implementations
+├── circuit_breaker.go # Failure handling
+└── etsi/
+    └── tsl_registry.go # ETSI TSL implementation
+```
+
+For detailed architecture documentation, see [ARCHITECTURE-MULTI-REGISTRY.md](./docs/ARCHITECTURE-MULTI-REGISTRY.md).
+
 ## Installation
 
 ```bash

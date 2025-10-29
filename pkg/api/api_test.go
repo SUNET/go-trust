@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -412,19 +413,31 @@ func TestAuthzenDecisionEndpoint_Errors(t *testing.T) {
 
 	// Valid JSON, but violates AuthZEN Trust Registry Profile validation
 	// (subject.type is not "key")
+	// Per AuthZEN spec, validation errors return 200 with decision=false
 	body := `{"subject":{"type":"user","id":"alice"},"resource":{"type":"x5c","id":"alice","key":[]}}`
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader(body)))
-	if w.Code != 400 {
-		t.Errorf("Expected 400 for validation error, got %d", w.Code)
+	if w.Code != 200 {
+		t.Errorf("Expected 200 for validation error (AuthZEN spec), got %d", w.Code)
+	}
+	var respValidation map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &respValidation)
+	if respValidation["decision"] != false {
+		t.Errorf("Expected decision=false for validation error, got %v", respValidation["decision"])
 	}
 
 	// Valid JSON, but resource.id != subject.id (validation error)
+	// Per AuthZEN spec, validation errors return 200 with decision=false
 	body = `{"subject":{"type":"key","id":"alice"},"resource":{"type":"x5c","id":"bob","key":["` + testCertBase64 + `"]}}`
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("POST", "/evaluation", strings.NewReader(body)))
-	if w.Code != 400 {
-		t.Errorf("Expected 400 for resource.id != subject.id, got %d", w.Code)
+	if w.Code != 200 {
+		t.Errorf("Expected 200 for resource.id != subject.id (AuthZEN spec), got %d", w.Code)
+	}
+	var respMismatch map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &respMismatch)
+	if respMismatch["decision"] != false {
+		t.Errorf("Expected decision=false for ID mismatch, got %v", respMismatch["decision"])
 	}
 
 	// Valid JSON, missing CertPool

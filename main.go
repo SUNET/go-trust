@@ -9,6 +9,8 @@ import (
 	_ "github.com/SUNET/go-trust/docs/swagger" // Import generated docs
 	"github.com/SUNET/go-trust/pkg/api"
 	"github.com/SUNET/go-trust/pkg/pipeline"
+	"github.com/SUNET/go-trust/pkg/registry"
+	"github.com/SUNET/go-trust/pkg/registry/etsi"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -94,6 +96,17 @@ func main() {
 
 	serverCtx := api.NewServerContext(nil) // Creates ServerContext with default logger
 	serverCtx.PipelineContext = &pipeline.Context{}
+
+	// Initialize RegistryManager with ETSI TSL registry
+	// TODO: Make resolution strategy configurable (currently defaults to FirstMatch)
+	registryMgr := registry.NewRegistryManager(registry.FirstMatch, 30*time.Second)
+
+	// Create ETSI TSL registry wrapping the pipeline context
+	// Note: This shares the same context as the legacy PipelineContext for backward compatibility
+	tslRegistry := etsi.NewTSLRegistry(serverCtx.PipelineContext, "ETSI-TSL")
+	registryMgr.Register(tslRegistry)
+
+	serverCtx.RegistryManager = registryMgr
 
 	// Set BaseURL for .well-known discovery
 	// Priority: 1) --external-url flag, 2) GO_TRUST_EXTERNAL_URL env var, 3) local host:port
