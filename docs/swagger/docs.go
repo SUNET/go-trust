@@ -87,26 +87,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/health": {
-            "get": {
-                "description": "Returns OK if the server is running and able to handle requests",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Health"
-                ],
-                "summary": "Liveness check",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/api.HealthResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/healthz": {
             "get": {
                 "description": "Returns OK if the server is running and able to handle requests",
@@ -129,14 +109,15 @@ const docTemplate = `{
         },
         "/info": {
             "get": {
-                "description": "Returns detailed summaries of all loaded Trust Status Lists\n\nThis endpoint provides comprehensive information about each TSL including:\n- Territory code\n- Sequence number\n- Issue date\n- Next update date\n- Number of services",
+                "description": "Returns detailed summaries of all loaded Trust Status Lists\n\nDEPRECATED: This endpoint is deprecated. Use GET /tsls instead.\n\nThis endpoint provides comprehensive information about each TSL including:\n- Territory code\n- Sequence number\n- Issue date\n- Next update date\n- Number of services",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Status"
                 ],
-                "summary": "Get TSL information",
+                "summary": "Get TSL information (DEPRECATED - use GET /tsls)",
+                "deprecated": true,
                 "responses": {
                     "200": {
                         "description": "tsl_summaries",
@@ -148,9 +129,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/readiness": {
+        "/readyz": {
             "get": {
-                "description": "Returns ready status if pipeline has been processed and TSLs are loaded",
+                "description": "Returns ready status if pipeline has been processed and TSLs are loaded\n\nQuery Parameters:\n- verbose=true: Include detailed TSL information in the response",
                 "produces": [
                     "application/json"
                 ],
@@ -158,32 +139,14 @@ const docTemplate = `{
                     "Health"
                 ],
                 "summary": "Readiness check",
-                "responses": {
-                    "200": {
-                        "description": "Service is ready",
-                        "schema": {
-                            "$ref": "#/definitions/api.ReadinessResponse"
-                        }
-                    },
-                    "503": {
-                        "description": "Service is not ready",
-                        "schema": {
-                            "$ref": "#/definitions/api.ReadinessResponse"
-                        }
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Include detailed TSL information",
+                        "name": "verbose",
+                        "in": "query"
                     }
-                }
-            }
-        },
-        "/ready": {
-            "get": {
-                "description": "Returns ready status if pipeline has been processed and TSLs are loaded",
-                "produces": [
-                    "application/json"
                 ],
-                "tags": [
-                    "Health"
-                ],
-                "summary": "Readiness check",
                 "responses": {
                     "200": {
                         "description": "Service is ready",
@@ -202,17 +165,39 @@ const docTemplate = `{
         },
         "/status": {
             "get": {
-                "description": "Returns the current server status including TSL count and last processing time",
+                "description": "Returns the current server status including TSL count and last processing time\n\nDEPRECATED: This endpoint is deprecated. Use GET /readyz for health checks.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Status"
                 ],
-                "summary": "Get server status",
+                "summary": "Get server status (DEPRECATED - use GET /readyz)",
+                "deprecated": true,
                 "responses": {
                     "200": {
                         "description": "tsl_count, last_processed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/tsls": {
+            "get": {
+                "description": "Returns comprehensive information about all loaded Trust Status Lists\n\nThis is the primary endpoint for retrieving TSL metadata including:\n- Territory codes\n- Sequence numbers\n- Issue and next update dates\n- Service counts per TSL\n- Last processing timestamp",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "TSLs"
+                ],
+                "summary": "List Trust Status Lists",
+                "responses": {
+                    "200": {
+                        "description": "count, last_updated, tsls",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -254,6 +239,14 @@ const docTemplate = `{
                 },
                 "tsl_count": {
                     "type": "integer"
+                },
+                "tsls": {
+                    "description": "Only included with ?verbose=true",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
                 }
             }
         },

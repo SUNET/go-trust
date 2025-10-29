@@ -334,27 +334,50 @@ See [example/config.yaml](./example/config.yaml) for a complete configuration ex
 
 ### API Endpoints
 
-The service exposes several HTTP endpoints:
+The service exposes a clean, standards-compliant API:
 
-#### Health & Monitoring
+#### Health & Monitoring (Kubernetes-native)
 
-- **GET /health** or **/healthz**: Liveness probe (always returns 200 OK when service is running)
-- **GET /ready** or **/readiness**: Readiness probe (returns 200 when TSLs loaded, 503 otherwise)
+- **GET /healthz**: Liveness probe (returns 200 OK when service is running)
+- **GET /readyz**: Readiness probe (returns 200 when TSLs loaded, 503 otherwise)
+  - Add `?verbose=true` to include detailed TSL summaries in the response
 - **GET /metrics**: Prometheus metrics endpoint for monitoring and observability
 
-#### Service Information
+The health endpoints follow Kubernetes conventions:
+- **Liveness** (`/healthz`) - Checks if the service is alive (K8s restarts unhealthy containers)
+- **Readiness** (`/readyz`) - Checks if the service is ready to accept traffic (K8s removes from load balancer if not ready)
 
-- **GET /status**: Check service health status and loaded TSL count
-- **GET /info**: Get detailed information about loaded TSLs
-- **GET /.well-known/authzen-configuration**: AuthZEN PDP discovery endpoint (RFC 8615)
+See the [Deployment Guide](#deployment) for Kubernetes integration examples.
 
-#### Trust Decisions
+#### AuthZEN Discovery & Evaluation
 
-- **POST /evaluation**: Evaluate trust decisions for X509 certificates (AuthZEN Trust Registry Profile)
+- **GET /.well-known/authzen-configuration**: PDP discovery endpoint per RFC 8615 and AuthZEN spec Section 9
+- **POST /evaluation**: Evaluate trust decisions for X.509 certificates (AuthZEN Trust Registry Profile)
 
-The health endpoints follow Kubernetes best practices:
-- **Liveness** checks if the service is alive (restarts unhealthy containers)
-- **Readiness** checks if the service is ready to accept traffic (removes from load balancer if not)
+#### TSL Information
+
+- **GET /tsls**: Get comprehensive information about all loaded Trust Status Lists
+  - Returns: TSL count, last update time, and detailed TSL metadata (territory, sequence, dates, service counts)
+
+#### Deprecated Endpoints (removed in v2.0.0)
+
+⚠️ **The following endpoints are deprecated and will be removed in the next major version:**
+
+- **GET /status** → Use `GET /readyz` instead
+- **GET /info** → Use `GET /tsls` instead
+
+These deprecated endpoints return HTTP headers indicating their deprecation:
+```
+Deprecation: true
+Link: </readyz>; rel="alternate"
+X-API-Warn: This endpoint is deprecated. Please use GET /readyz instead.
+```
+
+**Migration Guide:**
+- Replace `/status` calls with `/readyz` (same data, enhanced capabilities)
+- Replace `/info` calls with `/tsls` (better structure: `{count, last_updated, tsls: [...]}`)
+- Update Kubernetes probes to use `/healthz` and `/readyz` (not `/health`, `/ready`, or `/readiness`)
+- Use `/readyz?verbose=true` to get detailed TSL information (replaces separate `/status` + `/info` calls)
 
 See the [Deployment Guide](#deployment) for Kubernetes integration examples.
 

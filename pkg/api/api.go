@@ -245,20 +245,31 @@ func NewServerContext(logger logging.Logger) *ServerContext {
 	}
 }
 
-// RegisterAPIRoutes registers all API endpoints on the given Gin router using ServerContext.
-// It sets up the following endpoints:
+// RegisterAPIRoutes sets up all API routes on the given Gin engine.
+//
+// This function registers the following API endpoints:
+//
+// AuthZEN Discovery:
 //
 // GET /.well-known/authzen-configuration - Returns PDP metadata for service discovery (AuthZEN spec Section 9)
 //
-// GET /status - Returns the current server status including TSL count and last processing time
-//
-// GET /info - Returns detailed summaries of all TSLs in the current pipeline context
+// AuthZEN Evaluation:
 //
 // POST /evaluation - Implements the AuthZEN Trust Registry Profile for validating name-to-key bindings
 //
 //	This endpoint processes AuthZEN EvaluationRequest objects per draft-johansson-authzen-trust,
 //	validating that a public key (in resource.key) is correctly bound to a name (in subject.id)
 //	according to the trusted certificates in the pipeline context.
+//
+// TSL Information:
+//
+// GET /tsls - Returns detailed information about all loaded Trust Status Lists
+//
+// Deprecated Endpoints (will be removed in v2.0.0):
+//
+// GET /status - DEPRECATED: Use GET /readyz instead
+//
+// GET /info - DEPRECATED: Use GET /tsls instead
 //
 // If a RateLimiter is configured in the ServerContext, it will be applied to all routes.
 func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
@@ -273,9 +284,14 @@ func RegisterAPIRoutes(r *gin.Engine, serverCtx *ServerContext) {
 	// AuthZEN well-known discovery endpoint (Section 9 of base spec)
 	r.GET("/.well-known/authzen-configuration", WellKnownHandler(serverCtx.BaseURL))
 
-	// Register API handlers
-	r.GET("/status", StatusHandler(serverCtx))
+	// AuthZEN evaluation endpoint
 	r.POST("/evaluation", AuthZENDecisionHandler(serverCtx))
+
+	// TSL information endpoint
+	r.GET("/tsls", TSLsHandler(serverCtx))
+
+	// Deprecated endpoints (kept for backward compatibility)
+	r.GET("/status", StatusHandler(serverCtx))
 	r.GET("/info", InfoHandler(serverCtx))
 
 	// Test-mode shutdown endpoint

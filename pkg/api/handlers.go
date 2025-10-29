@@ -13,14 +13,22 @@ import (
 )
 
 // StatusHandler godoc
-// @Summary Get server status
+// @Summary Get server status (DEPRECATED - use GET /readyz)
 // @Description Returns the current server status including TSL count and last processing time
+// @Description
+// @Description DEPRECATED: This endpoint is deprecated. Use GET /readyz for health checks.
 // @Tags Status
+// @Deprecated true
 // @Produce json
 // @Success 200 {object} map[string]interface{} "tsl_count, last_processed"
 // @Router /status [get]
 func StatusHandler(serverCtx *ServerContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Add deprecation headers
+		c.Header("Deprecation", "true")
+		c.Header("Link", "</readyz>; rel=\"alternate\"")
+		c.Header("X-API-Warn", "This endpoint is deprecated. Please use GET /readyz instead.")
+
 		serverCtx.RLock()
 		defer serverCtx.RUnlock()
 		tslCount := 0
@@ -29,9 +37,10 @@ func StatusHandler(serverCtx *ServerContext) gin.HandlerFunc {
 		}
 
 		// Log the status request with structured logging
-		serverCtx.Logger.Info("API status request",
+		serverCtx.Logger.Warn("API status request (deprecated endpoint)",
 			logging.F("remote_ip", c.ClientIP()),
-			logging.F("tsl_count", tslCount))
+			logging.F("tsl_count", tslCount),
+			logging.F("replacement", "GET /readyz"))
 
 		c.JSON(200, gin.H{
 			"tsl_count":      tslCount,
@@ -171,8 +180,10 @@ func AuthZENDecisionHandler(serverCtx *ServerContext) gin.HandlerFunc {
 }
 
 // InfoHandler godoc
-// @Summary Get TSL information
+// @Summary Get TSL information (DEPRECATED - use GET /tsls)
 // @Description Returns detailed summaries of all loaded Trust Status Lists
+// @Description
+// @Description DEPRECATED: This endpoint is deprecated. Use GET /tsls instead.
 // @Description
 // @Description This endpoint provides comprehensive information about each TSL including:
 // @Description - Territory code
@@ -181,11 +192,17 @@ func AuthZENDecisionHandler(serverCtx *ServerContext) gin.HandlerFunc {
 // @Description - Next update date
 // @Description - Number of services
 // @Tags Status
+// @Deprecated true
 // @Produce json
 // @Success 200 {object} map[string]interface{} "tsl_summaries"
 // @Router /info [get]
 func InfoHandler(serverCtx *ServerContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Add deprecation headers
+		c.Header("Deprecation", "true")
+		c.Header("Link", "</tsls>; rel=\"alternate\"")
+		c.Header("X-API-Warn", "This endpoint is deprecated. Please use GET /tsls instead.")
+
 		serverCtx.RLock()
 		defer serverCtx.RUnlock()
 		summaries := make([]map[string]interface{}, 0)
@@ -196,7 +213,7 @@ func InfoHandler(serverCtx *ServerContext) gin.HandlerFunc {
 			tslSize = serverCtx.PipelineContext.TSLs.Size()
 		}
 
-		serverCtx.Logger.Debug("API info request: Inspecting pipeline context",
+		serverCtx.Logger.Debug("API info request (deprecated): Inspecting pipeline context",
 			logging.F("ctx_nil", serverCtx.PipelineContext == nil),
 			logging.F("tsls_nil", serverCtx.PipelineContext == nil || serverCtx.PipelineContext.TSLs == nil),
 			logging.F("tsls_size", tslSize))
@@ -210,12 +227,57 @@ func InfoHandler(serverCtx *ServerContext) gin.HandlerFunc {
 		}
 
 		// Log info request with structured logging
-		serverCtx.Logger.Info("API info request",
+		serverCtx.Logger.Warn("API info request (deprecated endpoint)",
 			logging.F("remote_ip", c.ClientIP()),
-			logging.F("summary_count", len(summaries)))
+			logging.F("summary_count", len(summaries)),
+			logging.F("replacement", "GET /tsls"))
 
 		c.JSON(200, gin.H{
 			"tsl_summaries": summaries,
+		})
+	}
+}
+
+// TSLsHandler godoc
+// @Summary List Trust Status Lists
+// @Description Returns comprehensive information about all loaded Trust Status Lists
+// @Description
+// @Description This is the primary endpoint for retrieving TSL metadata including:
+// @Description - Territory codes
+// @Description - Sequence numbers
+// @Description - Issue and next update dates
+// @Description - Service counts per TSL
+// @Description - Last processing timestamp
+// @Tags TSLs
+// @Produce json
+// @Success 200 {object} map[string]interface{} "count, last_updated, tsls"
+// @Router /tsls [get]
+func TSLsHandler(serverCtx *ServerContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serverCtx.RLock()
+		defer serverCtx.RUnlock()
+
+		summaries := make([]map[string]interface{}, 0)
+		tslCount := 0
+		lastUpdated := serverCtx.LastProcessed.Format(time.RFC3339)
+
+		if serverCtx.PipelineContext != nil && serverCtx.PipelineContext.TSLs != nil {
+			tslCount = serverCtx.PipelineContext.TSLs.Size()
+			for _, tsl := range serverCtx.PipelineContext.TSLs.ToSlice() {
+				if tsl != nil {
+					summaries = append(summaries, tsl.Summary())
+				}
+			}
+		}
+
+		serverCtx.Logger.Info("API /tsls request",
+			logging.F("remote_ip", c.ClientIP()),
+			logging.F("tsl_count", tslCount))
+
+		c.JSON(200, gin.H{
+			"count":        tslCount,
+			"last_updated": lastUpdated,
+			"tsls":         summaries,
 		})
 	}
 }

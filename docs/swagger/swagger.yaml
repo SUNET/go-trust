@@ -21,6 +21,12 @@ definitions:
         type: string
       tsl_count:
         type: integer
+      tsls:
+        description: Only included with ?verbose=true
+        items:
+          additionalProperties: true
+          type: object
+        type: array
     type: object
   authzen.Action:
     description: Action (role) in an AuthZEN trust evaluation request
@@ -219,19 +225,6 @@ paths:
       summary: Evaluate trust decision (AuthZEN Trust Registry Profile)
       tags:
       - AuthZEN
-  /health:
-    get:
-      description: Returns OK if the server is running and able to handle requests
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/api.HealthResponse'
-      summary: Liveness check
-      tags:
-      - Health
   /healthz:
     get:
       description: Returns OK if the server is running and able to handle requests
@@ -247,8 +240,11 @@ paths:
       - Health
   /info:
     get:
+      deprecated: true
       description: |-
         Returns detailed summaries of all loaded Trust Status Lists
+
+        DEPRECATED: This endpoint is deprecated. Use GET /tsls instead.
 
         This endpoint provides comprehensive information about each TSL including:
         - Territory code
@@ -264,31 +260,21 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: Get TSL information
+      summary: Get TSL information (DEPRECATED - use GET /tsls)
       tags:
       - Status
-  /readiness:
+  /readyz:
     get:
-      description: Returns ready status if pipeline has been processed and TSLs are
-        loaded
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Service is ready
-          schema:
-            $ref: '#/definitions/api.ReadinessResponse'
-        "503":
-          description: Service is not ready
-          schema:
-            $ref: '#/definitions/api.ReadinessResponse'
-      summary: Readiness check
-      tags:
-      - Health
-  /ready:
-    get:
-      description: Returns ready status if pipeline has been processed and TSLs are
-        loaded
+      description: |-
+        Returns ready status if pipeline has been processed and TSLs are loaded
+
+        Query Parameters:
+        - verbose=true: Include detailed TSL information in the response
+      parameters:
+      - description: Include detailed TSL information
+        in: query
+        name: verbose
+        type: boolean
       produces:
       - application/json
       responses:
@@ -305,8 +291,11 @@ paths:
       - Health
   /status:
     get:
-      description: Returns the current server status including TSL count and last
-        processing time
+      deprecated: true
+      description: |-
+        Returns the current server status including TSL count and last processing time
+
+        DEPRECATED: This endpoint is deprecated. Use GET /readyz for health checks.
       produces:
       - application/json
       responses:
@@ -315,9 +304,31 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: Get server status
+      summary: Get server status (DEPRECATED - use GET /readyz)
       tags:
       - Status
+  /tsls:
+    get:
+      description: |-
+        Returns comprehensive information about all loaded Trust Status Lists
+
+        This is the primary endpoint for retrieving TSL metadata including:
+        - Territory codes
+        - Sequence numbers
+        - Issue and next update dates
+        - Service counts per TSL
+        - Last processing timestamp
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: count, last_updated, tsls
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List Trust Status Lists
+      tags:
+      - TSLs
 schemes:
 - http
 - https

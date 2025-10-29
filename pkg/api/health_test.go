@@ -41,7 +41,7 @@ func TestHealthEndpoint(t *testing.T) {
 	r := gin.New()
 	RegisterHealthEndpoints(r, ctx)
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -83,7 +83,7 @@ func TestReadyEndpoint_Ready(t *testing.T) {
 	r := gin.New()
 	RegisterHealthEndpoints(r, ctx)
 
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -109,7 +109,7 @@ func TestReadyEndpoint_NotReady_NoTSLs(t *testing.T) {
 	r := gin.New()
 	RegisterHealthEndpoints(r, ctx)
 
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -134,7 +134,7 @@ func TestReadyEndpoint_NotReady_NotProcessed(t *testing.T) {
 	r := gin.New()
 	RegisterHealthEndpoints(r, ctx)
 
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -159,7 +159,7 @@ func TestReadinessEndpoint(t *testing.T) {
 	r := gin.New()
 	RegisterHealthEndpoints(r, ctx)
 
-	req := httptest.NewRequest(http.MethodGet, "/readiness", nil)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -182,8 +182,8 @@ func TestRegisterHealthEndpoints(t *testing.T) {
 	r := gin.New()
 	RegisterHealthEndpoints(r, ctx)
 
-	// Test all endpoints are registered
-	endpoints := []string{"/health", "/healthz", "/ready", "/readiness"}
+	// Test only current endpoints are registered
+	endpoints := []string{"/healthz", "/readyz"}
 	for _, endpoint := range endpoints {
 		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
 		w := httptest.NewRecorder()
@@ -191,6 +191,17 @@ func TestRegisterHealthEndpoints(t *testing.T) {
 
 		assert.NotEqual(t, http.StatusNotFound, w.Code,
 			"Endpoint %s should be registered", endpoint)
+	}
+
+	// Verify deprecated endpoints are NOT registered
+	deprecatedEndpoints := []string{"/health", "/ready", "/readiness"}
+	for _, endpoint := range deprecatedEndpoints {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code,
+			"Deprecated endpoint %s should NOT be registered", endpoint)
 	}
 }
 
@@ -206,7 +217,7 @@ func TestHealthEndpoint_Concurrent(t *testing.T) {
 	done := make(chan bool, 100)
 	for i := 0; i < 100; i++ {
 		go func() {
-			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 			assert.Equal(t, http.StatusOK, w.Code)
@@ -232,7 +243,7 @@ func TestReadyEndpoint_Concurrent(t *testing.T) {
 	done := make(chan bool, 100)
 	for i := 0; i < 100; i++ {
 		go func() {
-			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+			req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 			assert.Equal(t, http.StatusOK, w.Code)
@@ -260,6 +271,56 @@ func TestHealthResponse_JSONFormat(t *testing.T) {
 
 	expected := `{"status":"ok","timestamp":"2024-01-15T10:30:00Z"}`
 	assert.JSONEq(t, expected, string(data))
+}
+
+func TestReadyzEndpoint_Verbose(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	now := time.Now()
+	ctx := createTestContext(3, now)
+
+	r := gin.New()
+	RegisterHealthEndpoints(r, ctx)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz?verbose=true", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "Readyz endpoint should return 200 OK when ready")
+
+	var response ReadinessResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err, "Readyz verbose response should be valid JSON")
+
+	assert.Equal(t, "ready", response.Status)
+	assert.True(t, response.Ready)
+	assert.Equal(t, 3, response.TSLCount)
+	assert.NotNil(t, response.TSLs, "TSLs field should be populated in verbose mode")
+	assert.Len(t, response.TSLs, 3, "Should include 3 TSL summaries in verbose mode")
+}
+
+func TestReadyzEndpoint_NonVerbose(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	now := time.Now()
+	ctx := createTestContext(3, now)
+
+	r := gin.New()
+	RegisterHealthEndpoints(r, ctx)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response ReadinessResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, "ready", response.Status)
+	assert.True(t, response.Ready)
+	assert.Nil(t, response.TSLs, "TSLs field should be nil/omitted in non-verbose mode")
 }
 
 func TestReadinessResponse_JSONFormat(t *testing.T) {
