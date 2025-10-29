@@ -65,14 +65,18 @@ type ResolutionStrategy string
 
 const (
 	// FirstMatch returns as soon as any registry returns decision=true (default, fastest)
+	// Semantics: OR with fast exit
 	FirstMatch ResolutionStrategy = "first_match"
 
 	// AllRegistries queries all applicable registries and aggregates results (for auditing)
+	// Semantics: OR with complete result collection
 	AllRegistries ResolutionStrategy = "all"
 
 	// BestMatch queries all registries and returns the one with highest confidence
+	// Semantics: OR with quality selection
 	BestMatch ResolutionStrategy = "best_match"
 
 	// Sequential tries registries in registration order until one succeeds (for rate-limited APIs)
+	// Semantics: OR with ordered evaluation
 	Sequential ResolutionStrategy = "sequential"
 )

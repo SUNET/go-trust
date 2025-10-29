@@ -79,17 +79,55 @@ type TrustRegistry interface {
 
 Current implementations:
 - **ETSI TSL Registry**: Validates X.509 certificates against ETSI TS 119 612 Trust Status Lists
-- **OpenID Federation**: *(planned)* Entity resolution and trust chain validation
+- **OpenID Federation Registry**: Validates entity trust chains using OpenID Federation protocol
 - **DID Methods**: *(planned)* Decentralized identifier resolution
 
 #### Resolution Strategies
 
-The `RegistryManager` coordinates multiple registries using configurable strategies:
+The `RegistryManager` coordinates multiple registries using simple routing strategies:
 
-- **FirstMatch** (default): Parallel queries return first positive match (fastest)
-- **AllRegistries**: Query all registries and aggregate results (auditing)
+**Routing Strategies:**
+- **FirstMatch** (default): Parallel queries return first positive match (fastest, OR with fast exit)
+- **AllRegistries**: Query all registries and aggregate results (complete audit trail, OR semantics)
 - **BestMatch**: Select highest confidence match from all results
 - **Sequential**: Try registries in order until success (rate-limited APIs)
+
+**Advanced Boolean Logic via CompositeRegistry:**
+
+For complex trust policies, use `CompositeRegistry` to combine registries with boolean logic:
+- **LogicAND**: ALL registries must agree (defense-in-depth)
+- **LogicOR**: At least ONE registry must agree (fallback chain)
+- **LogicMAJORITY**: >50% of registries must agree (consensus)
+- **LogicQUORUM**: Configurable threshold (e.g., "2 of 3 must agree")
+
+CompositeRegistry implements `TrustRegistry`, enabling **arbitrary nesting** for complex policies like `(A OR B) AND (C OR D)`.
+
+For detailed documentation on multi-registry combinations, see [MULTI-REGISTRY-STRATEGIES.md](./docs/MULTI-REGISTRY-STRATEGIES.md).
+
+**Quick Example:**
+```go
+// Defense in depth: BOTH ETSI-TSL AND OpenID Federation must approve
+composite := registry.NewCompositeRegistry(
+    "defense-in-depth",
+    registry.LogicAND,
+    etsiTSLRegistry,
+    oidfRegistry,
+)
+manager.Register(composite)
+
+// Complex nesting: (A OR B) AND C
+orGroup := registry.NewCompositeRegistry("or-group", registry.LogicOR, regA, regB)
+policy := registry.NewCompositeRegistry("main", registry.LogicAND, orGroup, regC)
+manager.Register(policy)
+
+// Quorum: 2 of 3 validators must agree
+quorum := registry.NewCompositeRegistryWithOptions(
+    "quorum",
+    registry.LogicQUORUM,
+    []registry.TrustRegistry{v1, v2, v3},
+    registry.WithThreshold(2),
+)
+```
 
 #### Circuit Breaker Pattern
 
@@ -104,15 +142,112 @@ The registry package is organized for clarity and maintainability:
 
 ```
 pkg/registry/
-├── interface.go      # TrustRegistry interface and type definitions
-├── manager.go        # RegistryManager orchestration logic
-├── strategies.go     # Resolution strategy implementations
-├── circuit_breaker.go # Failure handling
-└── etsi/
-    └── tsl_registry.go # ETSI TSL implementation
+├── interface.go         # TrustRegistry interface and type definitions
+├── manager.go           # RegistryManager orchestration logic
+├── strategies.go        # Resolution strategy implementations
+├── circuit_breaker.go   # Failure handling
+├── etsi/
+│   └── tsl_registry.go  # ETSI TSL implementation
+└── oidfed/
+    └── oidfed_registry.go # OpenID Federation implementation
 ```
 
 For detailed architecture documentation, see [ARCHITECTURE-MULTI-REGISTRY.md](./docs/ARCHITECTURE-MULTI-REGISTRY.md).
+
+### OpenID Federation Registry
+
+The OpenID Federation registry enables trust evaluation for entities in an OpenID Federation. It validates trust chains from entities to configured trust anchors using the [go-oidfed/lib](https://github.com/go-oidfed/lib) library.
+
+#### Features
+
+- **Trust Chain Validation**: Automatically builds and validates trust chains from entities to trust anchors
+- **Signature Verification**: Verifies all entity statements in the chain using JWKS
+- **Trust Mark Support**: Optional requirement for specific trust marks to be present
+- **Metadata Extraction**: Extracts and returns entity metadata, trust marks, and certificates
+- **Caching**: Built-in caching with automatic refresh for performance
+
+#### Configuration Example
+
+```go
+import (
+    "github.com/SUNET/go-trust/pkg/registry/oidfed"
+)
+
+// Create OpenID Federation registry
+config := oidfed.Config{
+    TrustAnchors: []oidfed.TrustAnchorConfig{
+        {
+            EntityID: "https://federation.example.com",
+        },
+    },
+    RequiredTrustMarks: []string{
+        "https://example.com/trustmark/wallet-provider",
+    },
+    EntityTypes: []string{"openid_provider"},
+    Description: "EU Digital Identity Wallet Federation",
+}
+
+registry, err := oidfed.NewOIDFedRegistry(config)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+#### AuthZEN Integration
+
+The OpenID Federation registry maps federation concepts to AuthZEN evaluation:
+
+**Request Format:**
+```json
+{
+  "subject": {
+    "type": "key",
+    "id": "https://wallet.provider.example.com"
+  },
+  "resource": {
+    "type": "x5c",
+    "id": "https://wallet.provider.example.com",
+    "key": ["<x5c-cert-chain>"]
+  },
+  "action": {
+    "name": "http://ec.europa.eu/NS/wallet-provider"
+  }
+}
+```
+
+**Response with Valid Trust Chain:**
+```json
+{
+  "decision": true,
+  "context": {
+    "reason": {
+      "entity_id": "https://wallet.provider.example.com",
+      "trust_chain_length": 3,
+      "trust_anchor": "https://federation.example.com",
+      "metadata": {
+        "entity_types": ["openid_provider", "federation_entity"],
+        "trust_marks": ["https://example.com/trustmark/wallet-provider"],
+        "issuer": "https://wallet.provider.example.com",
+        "subject": "https://wallet.provider.example.com",
+        "expires_at": "2025-10-30T12:00:00Z"
+      }
+    }
+  }
+}
+```
+
+#### Trust Chain Validation
+
+The registry performs the following validation steps:
+
+1. **Entity Resolution**: Fetches the entity configuration from `/.well-known/openid-federation`
+2. **Chain Building**: Follows authority hints to build trust chain to configured trust anchors
+3. **Signature Verification**: Verifies all signatures in the chain using JWKS
+4. **Policy Application**: Applies metadata policies from superior entities
+5. **Constraint Checking**: Validates constraints (max path length, naming, entity types)
+6. **Trust Mark Verification**: Checks for required trust marks if configured
+
+For more details on OpenID Federation, see the [specification](https://openid.net/specs/openid-federation-1_0.html).
 
 ## Installation
 
